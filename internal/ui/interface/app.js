@@ -242,9 +242,8 @@
     ouvrir(el("div", null, etapes(2, 4), el("h2", { texte: "1. Installer le certificat du PC" }),
       blocQR(r.profil),
       el("ol", { classe: "guide" },
-        el("li", { texte: "Scanne avec l'appareil photo de l'iPhone. Safari prévient d'une connexion non privée : touche « Afficher les détails », puis « visiter ce site web »." }),
-        el("li", { texte: "Autorise le téléchargement du profil, puis ouvre Réglages > Profil téléchargé > Installer." }),
-        el("li", { texte: "Puis Réglages > Général > Informations > Réglages des certificats : active « Universal Airdrop CA »." })),
+        el("li", { texte: "Scanne avec l'appareil photo de l'iPhone et ouvre le lien dans Safari. Si Safari parle de connexion non privée : « Afficher les détails », puis « visiter ce site web »." }),
+        el("li", { texte: "La page qui s'ouvre te guide : télécharger le profil, l'installer, puis l'activer dans Réglages > Général > Informations > Réglages des certificats." })),
       el("p", { classe: "doux", texte: "Vérifie que l'empreinte SHA-256 affichée par l'iPhone est exactement :" }),
       el("p", { classe: "empreinte", texte: r.empreinte }),
       el("div", { classe: "boutons" }, el("button", { classe: "bouton", texte: "C'est fait", onclick: function () { etapeJeton(r, suite); } }))), suite);

@@ -22,6 +22,7 @@ import (
 	"github.com/Cams457/universal-airdrop/internal/config"
 	"github.com/Cams457/universal-airdrop/internal/identite"
 	"github.com/Cams457/universal-airdrop/internal/partage"
+	"github.com/Cams457/universal-airdrop/internal/profilios"
 	"github.com/Cams457/universal-airdrop/internal/securite"
 	"github.com/Cams457/universal-airdrop/internal/ui"
 )
@@ -87,6 +88,8 @@ func (s *Service) routesPubliques() http.Handler {
 	m.HandleFunc("POST /api/v1/transfert/{ident}/terminer", s.transfertTerminer)
 	m.HandleFunc("POST /api/rapide/fichier", s.rapideFichier)
 	m.HandleFunc("POST /api/rapide/lien", s.rapideLien)
+	m.HandleFunc("GET /iphone", s.pageIphone)
+	m.HandleFunc("GET /profil.mobileconfig", s.profilIOS)
 	m.HandleFunc("GET /p/{jeton}", s.pagePartage)
 	m.HandleFunc("GET /p/{jeton}/{i}", s.telechargerPartage)
 	m.HandleFunc("GET /envoyer/{jeton}", s.pageEnvoi)
@@ -433,6 +436,22 @@ func (s *Service) recevoirEnvoi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recevoirFormulaire(w, r, "téléphone")
+}
+
+// profilIOS sert le profil iOS (la CA publique du PC). Il n'a rien de secret : il reste
+// téléchargeable sans jeton ni limite d'usage, car Safari le récupère parfois deux fois
+// (avant et après « Autoriser »). La sécurité repose sur la vérification de l'empreinte.
+func (s *Service) profilIOS(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/x-apple-aspen-config")
+	w.Write(profilios.Generer(s.ID.DERCA(), s.Cfg.Nom, s.ID.Empreinte))
+	if r.Method == http.MethodGet {
+		s.Evenement("info", "Profil iOS téléchargé par "+ipDe(r), "")
+	}
+}
+
+// pageIphone : guide d'installation du certificat, ouvert en scannant le QR code de l'assistant.
+func (s *Service) pageIphone(w http.ResponseWriter, r *http.Request) {
+	ui.PageIphone(w, s.Cfg.Nom, identite.Lisible(s.ID.Empreinte))
 }
 
 // ---------- partage PC -> téléphone ----------

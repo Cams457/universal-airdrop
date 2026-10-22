@@ -19,7 +19,6 @@ import (
 	"github.com/Cams457/universal-airdrop/internal/config"
 	"github.com/Cams457/universal-airdrop/internal/identite"
 	"github.com/Cams457/universal-airdrop/internal/partage"
-	"github.com/Cams457/universal-airdrop/internal/profilios"
 	"github.com/Cams457/universal-airdrop/internal/reseau"
 	"github.com/Cams457/universal-airdrop/internal/securite"
 	"github.com/Cams457/universal-airdrop/internal/systeme"
@@ -658,13 +657,6 @@ func (s *Service) cAjouterTelephone(w http.ResponseWriter, r *http.Request) {
 	if nom == "" {
 		nom = "Téléphone"
 	}
-	dossier := filepath.Join(s.Cfg.Donnees, "ios")
-	_ = os.MkdirAll(dossier, 0o700)
-	profil := filepath.Join(dossier, "Universal-Airdrop-"+securite.NomSur(s.Cfg.NomMdns())+".mobileconfig")
-	if err := os.WriteFile(profil, profilios.Generer(s.ID.DERCA(), s.Cfg.Nom, s.ID.Empreinte), 0o644); err != nil {
-		erreur(w, http.StatusInternalServerError, err.Error())
-		return
-	}
 	jeton, err := s.Reg.AjouterTelephone(nom)
 	if err != nil {
 		erreur(w, http.StatusInternalServerError, err.Error())
@@ -676,11 +668,10 @@ func (s *Service) cAjouterTelephone(w http.ResponseWriter, r *http.Request) {
 		secours = append(secours, a.URL)
 	}
 	texte := "Jeton :\n" + jeton + "\n\nAdresse du PC :\n" + adresse + "\n\nAdresses de secours :\n" + strings.Join(secours, "\n")
-	jp := s.Partages.Creer(&partage.Partage{Type: partage.Fichiers, Fichiers: []string{profil}}, 30*time.Minute)
 	jt := s.Partages.Creer(&partage.Partage{Type: partage.Texte, Texte: texte}, 30*time.Minute)
 	s.Evenement("info", fmt.Sprintf("Téléphone « %s » ajouté", nom), "")
 	ecrireJSON(w, 200, map[string]any{
-		"profil": s.liensQR("/p/" + jp), "jeton": s.liensQR("/p/" + jt),
+		"profil": s.liensQR("/iphone"), "jeton": s.liensQR("/p/" + jt),
 		"empreinte": identite.Lisible(s.ID.Empreinte), "adresse": adresse,
 		"lien_raccourci": s.Cfg.LienRaccourci, "raccourci_qr": qrSiLien(s.Cfg.LienRaccourci),
 	})

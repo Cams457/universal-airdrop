@@ -307,7 +307,7 @@ func TestTelephoneEtPartages(t *testing.T) {
 	// page d'envoi pour n'importe quel téléphone
 	je := b.Partages.Creer(&partage.Partage{Type: partage.Envoi}, time.Minute)
 	code, page := faire(t, c, "GET", base+"/envoyer/"+je, nil, nil)
-	if code != 200 || !strings.Contains(string(page), "Envoyer à PC-B") {
+	if code != 200 || !strings.Contains(string(page), "PC-B") || !strings.Contains(string(page), "envoyer.js") {
 		t.Fatalf("page d'envoi : %d", code)
 	}
 	ct, corps = formulaire(t, map[string][]byte{"depuis-android.jpg": []byte("jpeg")})
@@ -409,5 +409,32 @@ func TestRenommageAChaud(t *testing.T) {
 	_, rep := faire(t, c, "GET", fmt.Sprintf("https://127.0.0.1:%d/api/v1/info", a.Cfg.Port), nil, nil)
 	if !strings.Contains(string(rep), "PC de Camil") {
 		t.Fatal("le nouveau nom n'est pas servi")
+	}
+}
+
+// Le profil iOS doit rester téléchargeable plusieurs fois : Safari le récupère parfois
+// avant ET après « Autoriser ». Un lien à usage unique faisait échouer l'installation.
+func TestProfilIOSReutilisable(t *testing.T) {
+	a := creer(t, "PC-A")
+	c := clientEpingle(t, a.ID.CAPEM)
+	u := fmt.Sprintf("https://127.0.0.1:%d/profil.mobileconfig", a.Cfg.Port)
+	// la page guide de l'iPhone affiche l'empreinte, comme dans iOS, et pointe vers le profil
+	_, page := faire(t, c, "GET", fmt.Sprintf("https://127.0.0.1:%d/iphone", a.Cfg.Port), nil, nil)
+	premiers := strings.Join(strings.Fields(identite.Lisible(a.ID.Empreinte))[:8], " ")
+	if !strings.Contains(string(page), premiers) || !strings.Contains(string(page), "/profil.mobileconfig") {
+		t.Fatal("page iPhone incomplète")
+	}
+	for i := range 3 {
+		req, _ := http.NewRequest("GET", u, nil)
+		r, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		corps, _ := io.ReadAll(r.Body)
+		r.Body.Close()
+		if r.StatusCode != 200 || r.Header.Get("Content-Type") != "application/x-apple-aspen-config" ||
+			!strings.Contains(string(corps), "com.apple.security.root") {
+			t.Fatalf("essai %d : %d %s", i+1, r.StatusCode, r.Header.Get("Content-Type"))
+		}
 	}
 }

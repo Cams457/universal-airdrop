@@ -13,10 +13,15 @@ l'épingler en **Favoris** pour qu'il soit toujours en tête (étape 5).
 ## Prérequis : ajouter l'iPhone (une fois par PC)
 
 Dans l'application sur le PC : **Ajouter un iPhone**, puis suis les trois étapes :
-1. **Installer le certificat du PC.** Scanne le QR code, installe le profil, puis active la confiance
-   totale dans Réglages > Général > Informations > Réglages des certificats.
-   Vérifie que l'empreinte SHA-256 affichée par l'iPhone est identique à celle du PC : c'est ce qui
-   garantit que personne n'a glissé son propre certificat.
+1. **Installer le certificat du PC.** Scanne le QR code et ouvre la page dans **Safari** : elle guide
+   pas à pas (télécharger le profil, l'installer, puis activer la confiance dans Réglages > Général >
+   Informations > Réglages des certificats). Vérifie que l'empreinte SHA-256 affichée par l'iPhone est
+   identique à celle du PC : c'est ce qui garantit que personne n'a glissé son propre certificat.
+
+   *Le certificat n'apparaît pas dans « Réglages des certificats » ?* Cette ligne n'existe qu'une fois
+   le profil **installé**. Cherche le profil en haut de Réglages (« Profil téléchargé ») ou dans
+   Général > VPN et gestion de l'appareil ; iOS l'efface s'il n'est pas installé dans les 8 minutes.
+   Sinon, retélécharge-le : le lien reste valable.
 2. **Récupérer le jeton.** Scanne le second QR code ; la page montre le **jeton** et l'**adresse** du PC
    (par exemple `https://pc-de-camil.local:47800`). Copie-les : la page ne s'affiche qu'une fois.
 3. **Le Raccourci** : si quelqu'un l'a déjà partagé (lien iCloud), installe-le et colle le jeton et
