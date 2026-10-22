@@ -103,6 +103,7 @@ func (s *Service) filtreControle(h http.Handler) http.Handler {
 func (s *Service) routesControle() http.Handler {
 	m := http.NewServeMux()
 	m.Handle("GET /", ui.Interface())
+	m.Handle("GET /statique/", http.StripPrefix("/statique/", ui.Public())) // guide.js partagé
 	m.HandleFunc("GET /controle/etat", s.cEtat)
 	m.HandleFunc("GET /controle/vus", s.cVus)
 	m.HandleFunc("POST /controle/reglages", s.cReglages)

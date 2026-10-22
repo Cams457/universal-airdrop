@@ -1,0 +1,57 @@
+/* App iPhone (écran d'accueil) : complète page.css */
+.appli{padding-top:max(.8rem,env(safe-area-inset-top))}
+.barre-appli{display:flex;align-items:center;gap:.65rem;margin:.2rem 0 1.4rem}
+.barre-appli img{border-radius:9px}
+.barre-appli div{display:flex;flex-direction:column;min-width:0}
+.barre-appli .sous{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.appli h1{font-size:1.75rem;margin:.3rem 0 1rem}
+.appli h2{font-size:1.1rem;margin:1.3rem 0 .5rem}
+.appli .carte h2{margin-top:0}
+.centre{text-align:center}
+
+.tuile{display:flex;align-items:center;gap:.9rem;width:100%;padding:1rem;margin:0 0 .8rem;border:0;border-radius:20px;
+  background:var(--carte);box-shadow:var(--ombre);color:inherit;font:inherit;text-align:left;cursor:pointer;transition:transform .12s}
+.tuile:active{transform:scale(.98)}
+.tuile .rond{width:3.3rem;height:3.3rem;margin:0;flex:none}
+.tuile .rond svg{width:1.6rem;height:1.6rem}
+.tuile .infos{flex:1;min-width:0}
+.tuile .sous{white-space:normal}
+.tuile.principale{padding:1.4rem 1.1rem;background:linear-gradient(160deg,var(--accent-2),var(--accent));color:#fff;box-shadow:0 10px 26px rgba(47,111,214,.3)}
+.tuile.principale .rond{background:rgba(255,255,255,.2);color:#fff}
+.tuile.principale .sous{color:rgba(255,255,255,.88)}
+.tuile.principale .grand{font-size:1.35rem}
+.badge{min-width:1.9rem;height:1.9rem;padding:0 .5rem;border-radius:99px;background:#fff;color:var(--accent);font-weight:700;display:grid;place-items:center}
+
+.retour{border:0;background:none;color:var(--accent);font:inherit;font-size:1rem;padding:.3rem 0;cursor:pointer}
+.encadre-install h2{margin-bottom:.6rem}
+.encadre-install .bouton{margin-top:.9rem}
+.icone-partage svg{width:1em;height:1em;vertical-align:-.12em}
+.code-grand{font-size:2.3rem;font-weight:700;letter-spacing:.12em;text-align:center;margin:.4rem 0;font-variant-numeric:tabular-nums}
+.deja{margin-top:1rem;color:var(--doux);font-size:.92rem}
+.deja summary{cursor:pointer;color:var(--accent)}
+
+.pastille-bouton{border:0;border-radius:99px;padding:.45rem .85rem;background:var(--accent-doux);color:var(--accent);font:inherit;font-weight:600;font-size:.88rem;white-space:nowrap;cursor:pointer}
+.pastille-bouton:disabled{background:var(--ok-doux);color:var(--ok)}
+.texte-recu{white-space:normal!important;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.etat-f.erreur{color:var(--erreur)}
+
+#texte{width:100%;margin:0 0 .9rem;padding:.75rem .85rem;border-radius:14px;border:1px solid var(--trait);background:var(--carte);color:inherit;font:inherit;resize:vertical}
+.titre-section{margin:.2rem 0 .45rem;color:var(--doux);font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.puces{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem}
+.puce-choix{border:1.5px solid var(--trait);border-radius:99px;padding:.55rem .95rem;background:var(--carte);color:inherit;font:inherit;font-size:.95rem;cursor:pointer}
+.puce-choix.choisie{border-color:var(--accent);background:var(--accent);color:#fff}
+.ok-texte{text-align:center}
+
+.intro-g{color:var(--doux);font-size:.93rem}
+.pas{padding-left:1.25rem}
+.pas li{margin:.45rem 0;font-size:.95rem}
+.encadre{background:var(--accent-doux);border-radius:12px;padding:.65rem .8rem;margin:.6rem 0;font-size:.9rem}
+.encadre p{margin:.25rem 0}
+.actions-raccourci{width:100%;border-collapse:collapse;font-size:.86rem;margin:.5rem 0;background:var(--carte);border-radius:14px;overflow:hidden}
+.actions-raccourci th,.actions-raccourci td{text-align:left;padding:.45rem .5rem;border-bottom:.5px solid var(--trait);vertical-align:top}
+.actions-raccourci th{color:var(--doux);font-weight:600;font-size:.78rem}
+.actions-raccourci td:first-child{color:var(--doux);width:1.6rem}
+.actions-raccourci td.retrait{padding-left:1.1rem}
+.appli code{font:.84em ui-monospace,"SF Mono",Menlo,monospace;background:var(--fond);padding:.05rem .3rem;border-radius:5px;overflow-wrap:anywhere}
+.pied-appli{text-align:center;margin-top:2rem}
+.lien-discret{border:0;background:none;color:var(--doux);font:inherit;font-size:.85rem;text-decoration:underline;cursor:pointer}

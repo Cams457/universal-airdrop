@@ -101,6 +101,73 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{"genre": genre
 <button class="bouton secondaire cache" id="encore" type="button">Envoyer d'autres fichiers</button></div>
 <script src="/statique/envoyer.js"></script>{{template "fin"}}{{end}}
 
+
+{{define "appli"}}<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Airdrop"><meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="format-detection" content="telephone=no">
+<title>Universal Airdrop</title><link rel="manifest" href="/app.webmanifest">
+<link rel="apple-touch-icon" href="/statique/app-180.png"><link rel="icon" href="/statique/app-192.png">
+<link rel="stylesheet" href="/statique/page.css"><link rel="stylesheet" href="/statique/appli.css"></head>
+<body><main class="appli" id="appli" data-pc="{{.}}">
+<header class="barre-appli"><img src="/statique/app-180.png" alt="" width="34" height="34"><div><strong>Universal Airdrop</strong>
+<span class="sous" id="relie-a">{{.}}</span></div></header>
+
+<section id="v-installer" class="cache"><div class="carte encadre-install">
+<h2>Ajoute l'app à ton écran d'accueil</h2>
+<p class="chemin"><span>Partager <span class="icone-partage">{{template "i-envoi"}}</span></span> <span><i>›</i> Sur l'écran d'accueil</span> <span><i>›</i> Ajouter</span></p>
+<p class="sous">Puis ouvre l'icône <b>Airdrop</b>. L'app de l'écran d'accueil a sa propre mémoire : c'est là qu'il faut relier l'iPhone.</p>
+<button class="bouton secondaire" type="button" id="continuer-safari">Continuer dans Safari</button></div></section>
+
+<section id="v-relier" class="cache"><div class="carte">
+<h2>Relier cet iPhone à {{.}}</h2>
+<p class="sous">Une seule fois. Le PC affichera un code : vérifie qu'il est identique, puis accepte.</p>
+<form id="f-relier" class="relier"><input id="nom-iphone" type="text" value="iPhone" maxlength="40" autocomplete="off" aria-label="Nom de l'iPhone">
+<button class="bouton principal" type="submit">Relier cet iPhone</button></form>
+<div id="r-attente" class="cache"><p class="sous">Sur le PC, touche <b>Accepter</b> si le code est le même :</p><p class="code-grand" id="r-code"></p><p class="sous">En attente du PC…</p></div>
+<details class="deja"><summary>J'ai déjà un jeton</summary>
+<form id="f-jeton" class="relier"><input id="jeton-colle" type="text" placeholder="Colle ton jeton" autocomplete="off" aria-label="Jeton">
+<button class="bouton secondaire" type="submit">Utiliser</button></form></details>
+<p class="erreur cache" id="r-erreur" role="alert"></p></div></section>
+
+<section id="v-accueil" class="cache">
+<button class="tuile principale" type="button" id="b-recevoir"><span class="rond">{{template "i-recu"}}</span>
+<span class="infos"><span class="grand">Recevoir</span><span class="sous" id="s-recevoir">Vérification…</span></span><span class="badge cache" id="badge"></span></button>
+<button class="tuile" type="button" id="b-envoyer"><span class="rond">{{template "i-envoi"}}</span>
+<span class="infos"><span class="grand">Envoyer</span><span class="sous">Photos, fichiers, liens · vers un ou plusieurs appareils</span></span></button>
+<button class="tuile" type="button" id="b-raccourcis"><span class="rond doux">{{template "i-cle"}}</span>
+<span class="infos"><span class="grand">Raccourcis</span><span class="sous">« Envoyer » dans le bouton Partager de toutes les apps</span></span></button>
+</section>
+
+<section id="v-recevoir" class="cache"><button class="retour" type="button" data-retour>‹ Accueil</button>
+<h1>Reçu pour toi</h1><div id="liste-recue"></div>
+<div class="bas"><button class="bouton principal cache" type="button" id="tout-enregistrer">Tout enregistrer</button></div></section>
+
+<section id="v-envoyer" class="cache"><button class="retour" type="button" data-retour>‹ Accueil</button>
+<h1>Envoyer</h1>
+<label class="zone" id="zone"><input type="file" id="fichiers" multiple><span class="rond">{{template "i-envoi"}}</span>
+<span class="grand">Choisir des photos ou des fichiers</span></label>
+<section class="carte liste cache" id="choisis"></section>
+<textarea id="texte" rows="2" placeholder="…ou colle un lien ou un texte" maxlength="65536"></textarea>
+<p class="titre-section">Vers</p><div id="destinations" class="puces"></div>
+<section class="carte progression cache" id="progression"><div class="pourcent" id="pourcent">0 %</div><div class="barre"><div id="plein"></div></div><p class="sous" id="detail"></p></section>
+<p class="erreur cache" id="e-erreur" role="alert"></p><p class="ok-texte cache" id="e-ok"></p>
+<div class="bas"><button class="bouton principal" type="button" id="b-go" disabled>Envoyer</button></div></section>
+
+<section id="v-raccourcis" class="cache"><button class="retour" type="button" data-retour>‹ Accueil</button>
+<h1>Construire les Raccourcis</h1>
+<p class="intro-g">Facultatif : l'app suffit pour recevoir et envoyer. Les Raccourcis ajoutent <b>Envoyer</b> au bouton Partager de toutes les apps (Photos, Safari…). Garde cette page ouverte à côté de l'app Raccourcis.</p>
+<div class="carte"><div class="valeur"><span class="etiquette">Adresse du PC</span><code id="g-adresse"></code><button class="bouton secondaire petit" type="button" data-copier="g-adresse">Copier</button></div>
+<div class="valeur"><span class="etiquette">Jeton (secret)</span><code id="g-jeton"></code><button class="bouton secondaire petit" type="button" data-copier="g-jeton">Copier</button></div></div>
+<h2>1. Raccourci « Envoyer »</h2><div id="g-envoyer"></div>
+<h2>2. Raccourci « Recevoir » (facultatif)</h2><div id="g-recevoir"></div>
+<h2>3. Le lancer tout seul</h2><div id="g-auto"></div></section>
+
+<footer class="pied-appli"><button class="lien-discret cache" type="button" id="delier">Délier cet iPhone</button></footer>
+</main><script src="/statique/guide.js"></script><script src="/statique/appli.js"></script></body></html>{{end}}
 {{define "iphone"}}{{template "debut" "Installer le certificat"}}{{template "entete" .Entete}}
 <p class="intro">Une seule fois : ton iPhone apprend à reconnaître ce PC, pour que tes envois soient chiffrés et que personne ne puisse se faire passer pour lui.</p>
 <ol class="etapes">
@@ -124,6 +191,10 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{"genre": genre
 <div class="valeur"><span class="etiquette">Jeton (secret)</span><code id="jeton"></code><button class="bouton secondaire petit" type="button" data-copier="jeton">Copier</button></div>
 <p class="sous">Ce jeton ne s'affiche qu'une fois. Garde-le seulement dans tes Raccourcis.</p></div>
 <p class="erreur cache" id="relier-erreur" role="alert"></p></div></li>
+<li class="carte"><span class="num">5</span><div><h2>Ajouter l'app à l'écran d'accueil</h2>
+<p>Boutons <b>Recevoir</b> et <b>Envoyer</b>, et le guide des Raccourcis avec ton adresse et ton jeton prêts à copier.</p>
+<a class="bouton principal" href="/app">Ouvrir l'app Universal Airdrop</a>
+<p class="sous">Puis Partager › Sur l'écran d'accueil, et relie l'iPhone depuis l'icône.</p></div></li>
 </ol>
 <section class="carte"><div class="carte-titre">{{template "i-bouclier"}}<span>Vérifie l'empreinte</span></div>
 <p class="sous">Dans le profil installé : <b>Plus de détails</b> → le certificat → <b>SHA-256</b>. Elle doit être identique à celle-ci et à celle affichée sur le PC :</p>
@@ -197,4 +268,10 @@ func PageIphone(w http.ResponseWriter, pc, empreinte string) {
 	_ = pages.ExecuteTemplate(w, "iphone", map[string]any{
 		"Entete": entete{Surtitre: "Ajouter ton iPhone", Titre: "Faire confiance à ce PC", PC: pc},
 		"NomCA":  "Universal Airdrop CA - " + pc, "Empreinte": lignes})
+}
+
+// PageAppli : l'app iPhone (web app à ajouter à l'écran d'accueil).
+func PageAppli(w http.ResponseWriter, pc string) {
+	entetesPage(w)
+	_ = pages.ExecuteTemplate(w, "appli", pc)
 }

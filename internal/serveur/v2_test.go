@@ -222,3 +222,59 @@ func TestAnnulationEnvoi(t *testing.T) {
 		t.Fatal("boîte non vidée")
 	}
 }
+
+// App iPhone : avec garder=1 rien n'est retiré avant l'accusé de réception (photo enregistrée).
+func TestAppIphoneGarderEtAccuser(t *testing.T) {
+	a := creer(t, "PC-A")
+	j, _ := a.Reg.AjouterTelephone("iPhone")
+	src := filepath.Join(t.TempDir(), "IMG_1.JPG")
+	os.WriteFile(src, []byte("jpeg"), 0o644)
+	a.Boites.DeposerFichier("iPhone", "PC-A", src, false)
+	a.Boites.DeposerTexte("iPhone", "PC-A", "https://exemple.fr", true)
+	c := clientEpingle(t, a.ID.CAPEM)
+	base := fmt.Sprintf("https://127.0.0.1:%d", a.Cfg.Port)
+	h := map[string]string{"Authorization": "Bearer " + j}
+	var b struct {
+		Nombre   int
+		Elements []struct{ ID, Type, URL, Destination string }
+	}
+	for range 2 { // deux lectures : rien ne disparaît
+		_, rep := faire(t, c, "GET", base+"/api/rapide/boite?garder=1", h, nil)
+		json.Unmarshal(rep, &b)
+		if b.Nombre != 2 {
+			t.Fatalf("garder=1 : %s", rep)
+		}
+	}
+	var f, l string
+	for _, e := range b.Elements {
+		if e.Type == "fichier" {
+			f = e.ID
+		} else {
+			l = e.ID
+		}
+	}
+	if code, x := faire(t, c, "GET", base+"/api/rapide/boite/"+f+"?garder=1", h, nil); code != 200 || string(x) != "jpeg" {
+		t.Fatal("téléchargement")
+	}
+	if a.Boites.Nombre("iPhone") != 2 {
+		t.Fatal("fichier retiré avant l'accusé de réception")
+	}
+	for _, id := range []string{f, l} {
+		if code, _ := faire(t, c, "POST", base+"/api/rapide/boite/"+id+"/recu", h, nil); code != 204 {
+			t.Fatal("accusé de réception refusé")
+		}
+	}
+	if a.Boites.Nombre("iPhone") != 0 {
+		t.Fatal("boîte non vidée après accusés")
+	}
+	_, rep := faire(t, c, "GET", base+"/api/rapide/moi", h, nil)
+	if !strings.Contains(string(rep), `"pc":"PC-A"`) || !strings.Contains(string(rep), ".local:") {
+		t.Fatalf("moi : %s", rep)
+	}
+	if code, page := faire(t, c, "GET", base+"/app", nil, nil); code != 200 || !strings.Contains(string(page), "appli.js") {
+		t.Fatal("page de l'app")
+	}
+	if code, m := faire(t, c, "GET", base+"/app.webmanifest", nil, nil); code != 200 || !strings.Contains(string(m), "standalone") {
+		t.Fatal("manifeste")
+	}
+}

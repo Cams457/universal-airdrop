@@ -27,6 +27,7 @@ import (
 	"github.com/Cams457/universal-airdrop/internal/appareils"
 	"github.com/Cams457/universal-airdrop/internal/client"
 	"github.com/Cams457/universal-airdrop/internal/securite"
+	"github.com/Cams457/universal-airdrop/internal/ui"
 )
 
 // distant : un téléphone d'un autre PC, joignable par relais.
@@ -282,11 +283,34 @@ func (s *Service) rBoite(w http.ResponseWriter, r *http.Request) {
 		Destination string `json:"destination"`
 		De          string `json:"de"`
 	}
+	type element struct {
+		ID          string `json:"id"`
+		Type        string `json:"type"`
+		Nom         string `json:"nom,omitempty"`
+		Taille      int64  `json:"taille,omitempty"`
+		Texte       string `json:"texte,omitempty"`
+		URL         string `json:"url,omitempty"`
+		Destination string `json:"destination,omitempty"`
+		De          string `json:"de"`
+	}
+	// garder=1 (app iPhone) : rien n'est retiré ici ; l'app accuse réception élément par élément,
+	// une fois la photo réellement enregistrée ou le lien copié.
+	garder := r.URL.Query().Get("garder") == "1"
 	fichiers := []fichier{}
+	elements := []element{}
 	textes, liens := []string{}, []string{}
 	des := map[string]bool{}
 	for _, e := range s.Boites.Lister(a.Nom) {
 		des[e.De] = true
+		el := element{ID: e.ID, Type: e.Type, Nom: e.Nom, Taille: e.Taille, Texte: e.Texte, De: e.De}
+		if e.Type == "fichier" {
+			el.URL = "https://" + r.Host + "/api/rapide/boite/" + e.ID
+			el.Destination = "fichiers"
+			if albumPhotos(e.Nom) {
+				el.Destination = "photos"
+			}
+		}
+		elements = append(elements, el)
 		switch e.Type {
 		case "fichier":
 			dest := "fichiers"
@@ -300,7 +324,9 @@ func (s *Service) rBoite(w http.ResponseWriter, r *http.Request) {
 			if e.Type == "lien" {
 				liens = append(liens, e.Texte)
 			}
-			s.Boites.Retirer(a.Nom, e.ID)
+			if !garder {
+				s.Boites.Retirer(a.Nom, e.ID)
+			}
 		}
 	}
 	var origines []string
@@ -320,7 +346,7 @@ func (s *Service) rBoite(w http.ResponseWriter, r *http.Request) {
 	}
 	ecrireJSON(w, 200, map[string]any{
 		"nombre": len(fichiers) + len(textes), "nombre_fichiers": len(fichiers), "fichiers": fichiers,
-		"texte": strings.Join(textes, "\n"), "liens": liens, "resume": resume,
+		"texte": strings.Join(textes, "\n"), "liens": liens, "resume": resume, "elements": elements,
 	})
 }
 
@@ -356,7 +382,7 @@ func (s *Service) rBoiteFichier(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+url.PathEscape(e.Nom))
 	ecrit := &compteur{ResponseWriter: w}
 	http.ServeContent(ecrit, r, e.Nom, st.ModTime(), f)
-	if r.Header.Get("Range") == "" && ecrit.n == st.Size() {
+	if r.Header.Get("Range") == "" && ecrit.n == st.Size() && r.URL.Query().Get("garder") != "1" {
 		s.Boites.Retirer(a.Nom, e.ID)
 		s.Evenement("envoye", fmt.Sprintf("« %s » a reçu %s", a.Nom, e.Nom), "")
 	}
@@ -568,4 +594,60 @@ func (s *Service) cDecisionDemande(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 	s.Evenement("info", fmt.Sprintf("« %s » ajouté aux appareils de confiance", d.Nom), "")
 	ecrireJSON(w, 200, map[string]bool{"ok": true})
+}
+
+// rRecu : l'app iPhone accuse réception d'un élément (photo enregistrée, lien copié) : il est retiré.
+func (s *Service) rRecu(w http.ResponseWriter, r *http.Request) {
+	a, _, ok := s.authentifier(w, r)
+	if !ok {
+		return
+	}
+	if a.Type != "telephone" {
+		erreur(w, http.StatusForbidden, "réservé aux téléphones")
+		return
+	}
+	id := r.PathValue("id")
+	for _, e := range s.Boites.Lister(a.Nom) {
+		if e.ID == id {
+			s.Boites.Retirer(a.Nom, id)
+			if e.Type == "fichier" {
+				s.Evenement("envoye", fmt.Sprintf("« %s » a reçu %s", a.Nom, e.Nom), "")
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+	}
+	erreur(w, http.StatusNotFound, "déjà reçu ou expiré")
+}
+
+// rMoi : l'app iPhone vérifie son jeton et récupère les adresses du PC (pour les Raccourcis).
+func (s *Service) rMoi(w http.ResponseWriter, r *http.Request) {
+	a, _, ok := s.authentifier(w, r)
+	if !ok {
+		return
+	}
+	var secours []string
+	for _, x := range s.adresses() {
+		secours = append(secours, x.URL)
+	}
+	ecrireJSON(w, 200, map[string]any{"nom": a.Nom, "type": a.Type, "pc": s.Cfg.Nom,
+		"adresse": fmt.Sprintf("https://%s.local:%d", s.Cfg.NomMdns(), s.Cfg.Port), "secours": secours,
+		"en_attente": s.Boites.Nombre(a.Nom)})
+}
+
+// pageAppli : l'app iPhone (à ajouter à l'écran d'accueil depuis Safari).
+func (s *Service) pageAppli(w http.ResponseWriter, r *http.Request) {
+	ui.PageAppli(w, s.Cfg.Nom)
+}
+
+func (s *Service) manifeste(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/manifest+json")
+	ecrireJSONBrut(w, map[string]any{
+		"name": "Universal Airdrop", "short_name": "Airdrop", "start_url": "/app", "scope": "/",
+		"display": "standalone", "background_color": "#f2f2f7", "theme_color": "#2f6fd6", "lang": "fr",
+		"icons": []map[string]string{
+			{"src": "/statique/app-192.png", "sizes": "192x192", "type": "image/png"},
+			{"src": "/statique/app-512.png", "sizes": "512x512", "type": "image/png"},
+		},
+	})
 }

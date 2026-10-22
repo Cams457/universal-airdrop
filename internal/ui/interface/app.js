@@ -383,35 +383,8 @@
   }
 
   // ---------- guide (bouton « ? ») ----------
-  // Texte avec `code`, **gras** et *italique*, sans HTML injecté.
-  function riche(t) {
-    var s = el("span"), re = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g, i = 0, m;
-    while ((m = re.exec(t))) {
-      if (m.index > i) s.appendChild(document.createTextNode(t.slice(i, m.index)));
-      var x = m[0];
-      s.appendChild(x[0] === "`" ? el("code", { texte: x.slice(1, -1) })
-        : x[1] === "*" ? el("strong", { texte: x.slice(2, -2) }) : el("em", { texte: x.slice(1, -1) }));
-      i = m.index + x.length;
-    }
-    if (i < t.length) s.appendChild(document.createTextNode(t.slice(i)));
-    return s;
-  }
-  function pas(liste) { var o = el("ol", { classe: "pas" }); liste.forEach(function (t) { o.appendChild(el("li", null, riche(t))); }); return o; }
-  function tableActions(lignes) {
-    var t = el("table", { classe: "actions-raccourci" }, el("tr", null, el("th", { texte: "#" }), el("th", { texte: "Action à ajouter" }), el("th", { texte: "Réglage" })));
-    lignes.forEach(function (l, i) {
-      var r = el("tr", null, el("td", { texte: String(i + 1) }), el("td", { classe: l[2] ? "retrait" : "" }, riche((l[2] ? "↳ ".repeat(l[2]) : "") + "**" + l[0] + "**")), el("td", null, riche(l[1])));
-      t.appendChild(r);
-    });
-    return t;
-  }
-  function encadre(lignes) { var d = el("div", { classe: "encadre" }); lignes.forEach(function (t) { d.appendChild(el("p", null, riche(t))); }); return d; }
-
-  var REGLAGES = [
-    "**Réglages G** (touche « Afficher plus » sur l'action) : méthode **GET** ; en-tête `Authorization` = `Bearer ` (avec l'espace) suivi de la variable `Jeton`.",
-    "**Réglages L** (lien ou texte) : méthode **POST** ; en-têtes `Authorization` = `Bearer ` + `Jeton` et `X-Destinations` = `Destinations` ; corps **JSON** avec un champ Texte de clé `texte` et de valeur *Élément répété*.",
-    "**Réglages F** (fichier) : méthode **POST** ; mêmes en-têtes ; corps **Formulaire** avec un champ **Fichier** de clé `fichier` et de valeur *Élément répété*."
-  ];
+  // Outils et données du guide des Raccourcis : /statique/guide.js (partagé avec l'app iPhone).
+  var riche = UAGuide.riche, pas = UAGuide.pas, encadre = UAGuide.encadre;
 
   function chapitres() {
     var sy = etat.systeme || {}, tels = (etat.appareils || []).filter(function (a) { return a.type === "telephone"; });
@@ -438,67 +411,31 @@
               "Copie l'**adresse du PC** et le **jeton** affichés sur l'iPhone : les Raccourcis les demandent."]),
             el("div", { classe: "boutons gauche" }, el("button", { classe: "bouton secondaire", texte: "Afficher aussi un QR code", onclick: function () { assistantIphone(); } }))];
         } },
+      { titre: "L'app sur l'écran d'accueil", sous: "boutons Recevoir et Envoyer, sans rien construire", fait: false,
+        corps: function () {
+          var adr = el("p", { classe: "adresse-grande", texte: "…" });
+          api("/controle/telephone/page").then(function (r) { adr.textContent = r.liens[0].url.replace(/\/iphone$/, "/app"); }).catch(function () {});
+          return [el("p", { texte: "Une fois le certificat installé (étape précédente), ouvre dans Safari :" }), adr,
+            pas(["Touche **Partager** (carré avec une flèche) › **Sur l'écran d'accueil** › **Ajouter**.",
+              "Ouvre l'icône **Airdrop** depuis l'écran d'accueil, puis **Relier cet iPhone** : une fenêtre s'ouvre ici avec un code à comparer. (L'app de l'écran d'accueil a sa propre mémoire : relie-la depuis l'icône, pas depuis Safari.)",
+              "**Recevoir** : aperçu de ce que les PC t'ont envoyé, **Tout enregistrer** (Photos ou Fichiers), liens à copier d'un geste.",
+              "**Envoyer** : choisis des photos ou colle un lien, coche les appareils.",
+              "**Raccourcis** : l'app affiche ton adresse et ton jeton avec un bouton Copier, pour construire les Raccourcis (facultatifs, ils ajoutent « Envoyer » au bouton Partager de toutes les apps)."])];
+        } },
       { titre: "Raccourci « Envoyer »", sous: "Partager → Envoyer, en choisissant les appareils", fait: false,
         corps: function () {
-          return [encadre(["App **Raccourcis** › **+** › renomme-le `Envoyer`. Touche **(i)** : active **Afficher dans la feuille de partage** ; types acceptés : *Images, Médias, Fichiers, URL, Texte* ; si aucune entrée : **Arrêter et répondre**."]),
-            tableActions([
-              ["Texte", "colle l'**adresse du PC**, ex. `https://pc-de-camil.local:47800`"],
-              ["Définir la variable", "nom `Adresse`, valeur *Texte*"],
-              ["Texte", "colle ton **jeton**"],
-              ["Définir la variable", "nom `Jeton`, valeur *Texte*"],
-              ["Obtenir le contenu de l'URL", "`Adresse` puis `/api/rapide/destinations` · Réglages G"],
-              ["Obtenir la valeur du dictionnaire", "Valeur pour la clé `destinations`"],
-              ["Choisir dans la liste", "invite `Envoyer à…` ; active **Sélectionner plusieurs**"],
-              ["Combiner le texte", "séparateur **Personnalisé** `|`"],
-              ["Encoder l'URL", "*Texte combiné* (en anglais : URL Encode)"],
-              ["Définir la variable", "nom `Destinations`"],
-              ["Répéter avec chaque élément", "dans *Entrée du raccourci*"],
-              ["Obtenir le type", "de *Élément répété*", 1],
-              ["Si", "*Type* est `URL`, **Ajouter une condition** : *Type* est `Texte`, **N'importe laquelle**", 1],
-              ["Obtenir le contenu de l'URL", "`Adresse` puis `/api/rapide/lien` · Réglages L", 2],
-              ["Sinon", "", 1],
-              ["Obtenir le contenu de l'URL", "`Adresse` puis `/api/rapide/fichier` · Réglages F", 2],
-              ["Fin si", "", 1],
-              ["Fin de la répétition", ""],
-              ["Afficher une notification", "`Envoyé ✓`"]]),
-            encadre(REGLAGES),
-            el("p", { classe: "doux", texte: "Essai : Photos › une photo › Partager › Envoyer › coche ce PC. La première fois : « Toujours autoriser ». Pour l'avoir en tête : feuille de partage › Modifier les actions › + devant Envoyer." })];
+          return UAGuide.envoyer().concat([
+            el("p", { classe: "doux", texte: "Essai : Photos › une photo › Partager › Envoyer › coche ce PC. La première fois : « Toujours autoriser ». Pour l'avoir en tête : feuille de partage › Modifier les actions › + devant Envoyer." })]);
         } },
       { titre: "Raccourci « Recevoir »", sous: "photos dans Photos, liens copiés", fait: false,
         corps: function () {
-          return [encadre(["**+** › renomme-le `Recevoir` (pas besoin de la feuille de partage). Les actions 1 à 4 sont les mêmes que pour Envoyer."]),
-            tableActions([
-              ["Texte", "l'adresse du PC"], ["Définir la variable", "`Adresse`"], ["Texte", "ton jeton"], ["Définir la variable", "`Jeton`"],
-              ["Obtenir le contenu de l'URL", "`Adresse` puis `/api/rapide/boite` · Réglages G"],
-              ["Définir la variable", "nom `Boite`"],
-              ["Obtenir la valeur du dictionnaire", "clé `texte` dans `Boite`"],
-              ["Si", "*Valeur du dictionnaire* **a une valeur**"],
-              ["Copier dans le presse-papiers", "*Valeur du dictionnaire*", 1],
-              ["Fin si", ""],
-              ["Obtenir la valeur du dictionnaire", "clé `fichiers` dans `Boite`"],
-              ["Répéter avec chaque élément", "dans *Valeur du dictionnaire*"],
-              ["Obtenir la valeur du dictionnaire", "clé `url` dans *Élément répété*", 1],
-              ["Obtenir le contenu de l'URL", "*Valeur du dictionnaire* · Réglages G", 1],
-              ["Définir la variable", "nom `Fichier`", 1],
-              ["Obtenir la valeur du dictionnaire", "clé `destination` dans *Élément répété*", 1],
-              ["Si", "*Valeur du dictionnaire* est `photos`", 1],
-              ["Enregistrer dans l'album photo", "`Fichier`", 2],
-              ["Sinon", "", 1],
-              ["Enregistrer le fichier", "`Fichier` ; désactive **Demander où enregistrer** ; dossier `Universal Airdrop`", 2],
-              ["Fin si", "", 1],
-              ["Fin de la répétition", ""],
-              ["Obtenir la valeur du dictionnaire", "clé `resume` dans `Boite`"],
-              ["Afficher une notification", "*Valeur du dictionnaire*"]]),
-            el("p", { classe: "doux", texte: "Essai : sur ce PC, glisse une photo, coche ton iPhone, Envoyer ; puis lance Recevoir sur l'iPhone." })];
+          return UAGuide.recevoir().concat([
+            el("p", { classe: "doux", texte: "Essai : sur ce PC, glisse une photo, coche ton iPhone, Envoyer ; puis lance Recevoir sur l'iPhone." })]);
         } },
       { titre: "Lancer « Recevoir » tout seul", sous: "en arrivant sur le Wi-Fi, ou d'un geste", fait: false,
         corps: function () {
-          return [pas([
-            "**En arrivant à la maison** : Raccourcis › **Automatisation** › **+** › **Wi-Fi** › ton réseau › **Se connecte** › **Exécuter immédiatement** (désactive *Me notifier*) › **Suivant** › *Recevoir*.",
-            "**D'un double tapotement au dos** : Réglages › Accessibilité › Toucher › **Toucher le dos** › Toucher deux fois › *Recevoir*.",
-            "**Depuis l'écran d'accueil** : appui long › **+** › Raccourcis › *Recevoir*.",
-            "iPhone 15 Pro et plus récents : le **bouton Action** peut lancer *Recevoir*."]),
-            el("p", { classe: "doux", texte: "En partage de connexion, l'iPhone n'est pas « connecté à un Wi-Fi » : utilise alors le toucher du dos ou le widget. Sans application de l'App Store, iOS ne permet pas une réception instantanée." })];
+          return UAGuide.automatique().concat([
+            el("p", { classe: "doux", texte: "En partage de connexion, l'iPhone n'est pas « connecté à un Wi-Fi » : utilise alors le toucher du dos ou le widget. Sans application de l'App Store, iOS ne permet pas une réception instantanée." })]);
         } },
       { titre: "Ajouter un autre PC", sous: "code à 6 chiffres comparé sur les deux écrans", fait: pcs().length > 0,
         corps: function () {

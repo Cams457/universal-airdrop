@@ -45,6 +45,10 @@ func ecrireJSON(w http.ResponseWriter, statut int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+func ecrireJSONBrut(w http.ResponseWriter, v any) {
+	_ = json.NewEncoder(w).Encode(v)
+}
+
 func erreur(w http.ResponseWriter, statut int, message string) {
 	ecrireJSON(w, statut, map[string]string{"erreur": message})
 }
@@ -94,6 +98,10 @@ func (s *Service) routesPubliques() http.Handler {
 	m.HandleFunc("GET /api/rapide/destinations", s.rDestinations)
 	m.HandleFunc("GET /api/rapide/boite", s.rBoite)
 	m.HandleFunc("GET /api/rapide/boite/{id}", s.rBoiteFichier)
+	m.HandleFunc("POST /api/rapide/boite/{id}/recu", s.rRecu)
+	m.HandleFunc("GET /api/rapide/moi", s.rMoi)
+	m.HandleFunc("GET /app", s.pageAppli)
+	m.HandleFunc("GET /app.webmanifest", s.manifeste)
 	m.HandleFunc("GET /api/v1/telephones", s.rTelephones)
 	m.HandleFunc("POST /api/v1/telephone/demande", s.rDemander)
 	m.HandleFunc("GET /api/v1/telephone/demande/{id}", s.rSuivreDemande)
