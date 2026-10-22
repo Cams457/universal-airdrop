@@ -19,8 +19,9 @@ aux applications. Un Raccourci apparaît dans la liste juste en dessous ; on peu
 ## Prérequis : relier l'iPhone à un PC (une fois, sans QR code)
 
 1. Sur le PC : **Ajouter un iPhone**. L'application affiche une adresse, par exemple
-   `pc-de-camil.local:47800/iphone`.
-2. Sur l'iPhone, ouvre **Safari** et tape cette adresse (ou scanne le QR code proposé, c'est la même chose).
+   `https://pc-de-camil.local:47800/iphone`.
+2. Sur l'iPhone, ouvre **Safari** et tape cette adresse **avec `https://` au début** (sans lui, le PC
+   redirige tout seul depuis la version 2.0.1), ou scanne le QR code proposé : c'est la même chose.
    Si Safari parle de connexion non privée : **Afficher les détails** > **visiter ce site web**.
 3. La page guide pas à pas :
    1. **Télécharger le profil**, puis **Autoriser** ;
@@ -166,6 +167,7 @@ les appareils, construis *Envoyer* ci-dessus avec le même jeton et la même adr
 | Symptôme | Cause probable | Correction |
 |---|---|---|
 | « Connexion non sécurisée » | certificat non installé ou confiance non activée | refaire les étapes 1 à 3 de la page `…/iphone` |
+| « Client sent an HTTP request to an HTTPS server » | adresse tapée sans `https://` (version 2.0.0) | taper `https://` au début, ou mettre à jour l'application |
 | Erreur 401 | jeton mal copié ou iPhone retiré | refaire « Relier cet iPhone » et recoller le jeton |
 | Erreur 429 | trop d'essais avec un mauvais jeton | attendre 10 minutes, corriger le jeton |
 | « aucun destinataire connu de ce PC » | nom d'appareil changé depuis | relancer *Envoyer* : la liste est relue à chaque fois |

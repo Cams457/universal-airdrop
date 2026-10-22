@@ -327,8 +327,8 @@
   function assistantIphone(suite) {
     api("/controle/telephone/page").then(function (r) {
       var c = el("div", null, etapes(1, 2), el("h2", { texte: "Ajouter un iPhone" }),
-        el("p", { texte: "Sur l'iPhone, ouvre Safari et tape cette adresse :" }),
-        el("p", { classe: "adresse-grande", texte: r.liens[0].url.replace("https://", "") }),
+        el("p", { texte: "Sur l'iPhone, ouvre Safari et tape cette adresse en entier, avec https:// au début :" }),
+        el("p", { classe: "adresse-grande", texte: r.liens[0].url }),
         el("p", { classe: "doux", texte: "La page guide pas à pas : installer le certificat de ce PC, puis « Relier cet iPhone ». Une fenêtre s'ouvrira ici pour accepter, avec un code à comparer." }));
       var d = el("details", null, el("summary", { texte: "Plus rapide : scanner un QR code, ou une autre adresse" }));
       d.appendChild(blocQR(r.liens, "Si l'adresse en .local ne répond pas, essaie une adresse ci-dessous (même Wi-Fi ou partage de connexion)."));
