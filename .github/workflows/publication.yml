@@ -1,0 +1,61 @@
+name: tests et exécutables
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  tests:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Tests
+        run: go test ./...
+      - name: Presse-papiers Windows (résultat détaillé)
+        if: runner.os == 'Windows'
+        run: go test -v -count=1 -run PressePapiers ./internal/systeme/
+      - name: Tests sous le détecteur de concurrence
+        if: runner.os == 'Linux'
+        run: go test -race ./...
+
+  windows:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Compilation des exécutables Windows
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then VERSION="${GITHUB_REF_NAME#v}"; else VERSION="dev-${GITHUB_SHA::7}"; fi
+          for arch in amd64 arm64; do
+            GOOS=windows GOARCH=$arch CGO_ENABLED=0 go build -trimpath \
+              -ldflags "-H windowsgui -s -w -X main.version=$VERSION" \
+              -o "dist/UniversalAirdrop-$arch.exe" ./cmd/universal-airdrop
+          done
+          cp dist/UniversalAirdrop-amd64.exe dist/UniversalAirdrop.exe
+          (cd dist && sha256sum *.exe > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: universal-airdrop-windows
+          path: dist/
+      - name: Publication (sur un tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/UniversalAirdrop.exe
+            dist/UniversalAirdrop-arm64.exe
+            dist/SHA256SUMS.txt

@@ -1,0 +1,10 @@
+# Exécutables compilés (sauf ceux publiés dans telecharger/)
+*.exe
+!telecharger/*.exe
+dist/
+# Fichiers temporaires de réception et de mesure
+*.part
+bench_*.bin
+# Éditeurs
+.vscode/
+.idea/

@@ -1,0 +1,2 @@
+ad0cd57f0cf04990dc0727392f2b0ba5d44af7de55fee2ccc47f25d131e2ab2d  UniversalAirdrop-arm64.exe
+a4617b8e094aebd4929f2133911f6e7f9127a13f2c326637861820795692d338  UniversalAirdrop.exe

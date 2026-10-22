@@ -1,0 +1,134 @@
+/* Pages ouvertes sur le téléphone (scan d'un QR code). Style proche d'iOS, clair et sombre. */
+:root{
+  --fond:#f2f2f7; --carte:#fff; --texte:#1c1c1e; --doux:#6c6c70; --trait:rgba(60,60,67,.14);
+  --accent:#2f6fd6; --accent-2:#4b8bf0; --accent-doux:rgba(47,111,214,.11);
+  --ok:#2e9e4f; --ok-doux:rgba(46,158,79,.13); --erreur:#d23f31;
+  --image:#e8833a; --video:#8e5bd8; --pdf:#d9443a; --fichier:#7d8590; --lien:#2f6fd6;
+  --ombre:0 1px 2px rgba(0,0,0,.04),0 6px 20px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme:dark){:root{
+  --fond:#000; --carte:#1c1c1e; --texte:#f2f2f7; --doux:#98989f; --trait:rgba(235,235,245,.12);
+  --accent:#4a8cf2; --accent-2:#6aa2f5; --accent-doux:rgba(74,140,242,.17); --ok:#3fbf63; --ok-doux:rgba(63,191,99,.16);
+  --erreur:#ff6b5e; --ombre:none;
+}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--fond);color:var(--texte);
+  font:17px/1.42 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,"Segoe UI",Roboto,sans-serif}
+main{max-width:30rem;margin:0 auto;
+  padding:max(1.75rem,env(safe-area-inset-top)) max(1rem,env(safe-area-inset-right)) max(1.5rem,env(safe-area-inset-bottom)) max(1rem,env(safe-area-inset-left))}
+svg{width:1.25em;height:1.25em;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+b{font-weight:600}
+.cache{display:none!important}
+
+/* En-tête */
+.entete{text-align:center;margin:.5rem 0 1.75rem}
+.appli{display:block;margin:0 auto 1rem;border-radius:15px;box-shadow:0 8px 24px rgba(47,111,214,.28)}
+.surtitre{margin:0;color:var(--doux);font-size:.88rem;font-weight:500}
+h1{text-wrap:balance;margin:.15rem 0 .7rem;font-size:1.75rem;line-height:1.15;font-weight:700;letter-spacing:-.02em}
+h2{margin:0 0 .3rem;font-size:1.06rem;font-weight:600}
+.puce{display:inline-flex;align-items:center;gap:.4rem;margin:0;padding:.38rem .8rem;border-radius:999px;
+  background:var(--accent-doux);color:var(--accent);font-size:.92rem;font-weight:600;max-width:100%}
+.puce span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sous-titre{margin:.25rem 0 0;color:var(--doux);font-size:.95rem}
+.intro{color:var(--doux);text-align:center;margin:-.5rem .5rem 1.5rem;font-size:.95rem}
+
+/* Cartes et listes */
+.carte{display:block;background:var(--carte);border-radius:18px;box-shadow:var(--ombre);padding:1rem;margin:0 0 .9rem;color:inherit;text-decoration:none}
+.carte-titre{display:flex;align-items:center;gap:.5rem;font-weight:600;margin-bottom:.65rem;color:var(--accent)}
+.liste{padding:.25rem 0}
+.ligne-lien{display:flex;align-items:center;gap:.8rem;padding:.7rem 1rem;color:inherit;text-decoration:none;min-height:3.75rem}
+.liste .ligne-lien+.ligne-lien,.liste .fichier+.fichier{border-top:.5px solid var(--trait)}
+.carte.ligne-lien{padding:.85rem 1rem}
+.ligne-lien:active{background:var(--accent-doux)}
+.vignette{display:grid;place-items:center;width:2.6rem;height:2.6rem;border-radius:11px;flex:none;color:#fff;overflow:hidden;background:var(--fichier)}
+.vignette.image{background:var(--image)}.vignette.video{background:var(--video)}.vignette.pdf{background:var(--pdf)}.vignette.lien{background:var(--lien)}
+.vignette img{width:100%;height:100%;object-fit:cover}
+.infos{display:flex;flex-direction:column;min-width:0;flex:1}
+.nom{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sous{color:var(--doux);font-size:.86rem;overflow-wrap:anywhere}
+.infos .sous{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pastille{display:grid;place-items:center;width:2.2rem;height:2.2rem;border-radius:50%;background:var(--accent-doux);color:var(--accent);flex:none}
+.chevron{color:var(--doux);opacity:.6}
+.fichier{display:flex;align-items:center;gap:.8rem;padding:.6rem 1rem}
+.fichier .etat-f{color:var(--doux);font-size:.86rem;white-space:nowrap}
+.fichier .etat-f.ok{color:var(--ok)}
+.resume{padding:.6rem 1rem .5rem;color:var(--doux);font-size:.86rem;border-top:.5px solid var(--trait)}
+
+/* Boutons */
+.bouton{display:flex;align-items:center;justify-content:center;gap:.5rem;width:100%;min-height:3.25rem;padding:.8rem 1rem;
+  border:0;border-radius:14px;font:inherit;font-weight:600;text-decoration:none;cursor:pointer;transition:transform .12s,opacity .2s}
+.bouton:active{transform:scale(.98)}
+.bouton.principal{background:linear-gradient(180deg,var(--accent-2),var(--accent));color:#fff;box-shadow:0 6px 16px rgba(47,111,214,.25)}
+.bouton.secondaire{background:var(--accent-doux);color:var(--accent);margin-top:.6rem}
+.bouton:disabled{opacity:.4;box-shadow:none}
+.bouton.ok{background:var(--ok);box-shadow:none}
+.bas{position:sticky;bottom:0;padding:1rem 0 max(.5rem,env(safe-area-inset-bottom));
+  background:linear-gradient(to top,var(--fond) 70%,transparent)}
+
+/* Zone de choix */
+.zone{position:relative;display:flex;flex-direction:column;align-items:center;gap:.3rem;padding:1.75rem 1rem 1.6rem;margin-bottom:.9rem;
+  background:var(--carte);border-radius:22px;box-shadow:var(--ombre);text-align:center;cursor:pointer;
+  outline:2px dashed var(--trait);outline-offset:-10px;transition:transform .12s}
+.zone:active{transform:scale(.99)}
+.zone input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.rond{display:grid;place-items:center;width:4rem;height:4rem;border-radius:50%;background:var(--accent-doux);color:var(--accent);margin-bottom:.45rem}
+.rond svg{width:1.9rem;height:1.9rem}
+.rond.ok{background:var(--ok);color:#fff}
+.rond.ok svg{stroke-width:2.6}
+.rond.doux{background:var(--trait);color:var(--doux)}
+.grand{font-weight:600;font-size:1.08rem}
+
+/* Progression */
+.progression{text-align:center;padding:1.25rem 1rem}
+.pourcent{font-size:2.6rem;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.barre{height:8px;border-radius:99px;background:var(--trait);overflow:hidden;margin:.6rem 0 .7rem}
+.barre div{height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--accent-2),var(--accent));transition:width .25s}
+.progression .sous{margin:0;font-variant-numeric:tabular-nums}
+
+/* États vides, fin, erreur */
+.vide{text-align:center;padding:2.5rem 1rem 1rem}
+.vide .rond{margin:0 auto 1rem;width:4.5rem;height:4.5rem}
+.vide h1,.vide h2{font-size:1.4rem;margin:0 0 .4rem}
+.vide p{color:var(--doux);margin:0}
+#fini .rond{animation:apparait .45s cubic-bezier(.2,1.4,.4,1)}
+@keyframes apparait{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+.erreur{color:var(--erreur);text-align:center;font-weight:500;margin:.5rem 0}
+
+/* Jeton */
+.texte{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:.9rem/1.5 ui-monospace,"SF Mono",Menlo,monospace;
+  background:var(--fond);border-radius:12px;padding:.85rem;-webkit-user-select:all;user-select:all}
+
+/* Guide iPhone */
+.etapes{list-style:none;margin:0;padding:0}
+.etapes .carte{display:flex;gap:.85rem;align-items:flex-start}
+.etapes .carte>div{flex:1;min-width:0}
+.etapes p{margin:0 0 .5rem;font-size:.95rem}
+.etapes .bouton{margin-top:.75rem}
+.num{display:grid;place-items:center;width:1.8rem;height:1.8rem;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:.92rem;flex:none}
+.chemin{padding:.5rem .7rem;border-radius:10px;background:var(--fond);font-size:.9rem;font-weight:500;line-height:1.6}
+.chemin span{white-space:nowrap}
+.chemin i{font-style:normal;color:var(--doux);margin:0 .15rem}
+.empreinte{display:grid;gap:.2rem;margin-top:.7rem;padding:.75rem;border-radius:12px;background:var(--fond);
+  font:.8rem/1.45 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.02em;text-align:center}
+
+.note{color:var(--doux);font-size:.86rem;text-align:center;margin:.75rem .5rem 0}
+.pied{display:flex;align-items:center;justify-content:center;gap:.4rem;margin-top:2.25rem;color:var(--doux);font-size:.75rem;opacity:.85}
+.pied img{border-radius:4px}
+
+/* Relier cet iPhone */
+.relier{display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap}
+.relier input{flex:1;min-width:8rem;min-height:3.25rem;padding:.6rem .8rem;border-radius:14px;border:1px solid var(--trait);background:var(--fond);color:inherit;font:inherit}
+.relier .bouton{width:auto;flex:1 1 12rem}
+.etapes .code{font-size:2.3rem;font-weight:700;letter-spacing:.12em;text-align:center;margin:.4rem 0;font-variant-numeric:tabular-nums}
+.ok-texte{color:var(--ok);font-weight:600}
+.valeur{display:grid;grid-template-columns:1fr auto;gap:.2rem .6rem;align-items:center;padding:.6rem .7rem;border-radius:12px;background:var(--fond);margin:.5rem 0}
+.valeur .etiquette{grid-column:1/-1;color:var(--doux);font-size:.8rem;font-weight:500}
+.valeur code{font:.82rem/1.4 ui-monospace,"SF Mono",Menlo,monospace;overflow-wrap:anywhere;-webkit-user-select:all;user-select:all}
+.bouton.petit{min-height:2.4rem;width:auto;padding:.4rem .8rem;margin:0;font-size:.9rem}
+.champ-texte{width:100%;margin:0 0 .9rem;padding:.75rem .85rem;border-radius:14px;border:1px solid var(--trait);background:var(--carte);color:inherit;font:inherit;resize:vertical}
+.carte.ligne-lien+.bouton{margin-top:-.3rem;margin-bottom:.9rem}
+.vers-app{display:inline-flex;align-items:baseline;gap:.35rem;margin:.2rem 0 .6rem;padding:.45rem .9rem .45rem .7rem;border-radius:99px;
+  background:var(--accent-doux);color:var(--accent);font-weight:600;font-size:.98rem;text-decoration:none}
+.vers-app span{font-size:1.3rem;line-height:1}
+.vers-app small{font-weight:500;font-size:.78rem;opacity:.8}

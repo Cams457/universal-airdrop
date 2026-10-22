@@ -1,0 +1,365 @@
+package serveur
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/Cams457/universal-airdrop/internal/client"
+)
+
+func attendre(t *testing.T, quoi string, cond func() bool) {
+	t.Helper()
+	for range 150 {
+		if cond() {
+			return
+		}
+		time.Sleep(40 * time.Millisecond)
+	}
+	t.Fatalf("délai dépassé : %s", quoi)
+}
+
+// v2 : l'iPhone choisit ses destinataires, le PC relaie ; boîte d'envoi des téléphones ;
+// relais vers le téléphone d'un autre PC ; ajout d'un iPhone sans QR code.
+func TestV2DestinationsRelaisEtBoite(t *testing.T) {
+	a, b := creer(t, "PC-A"), creer(t, "PC-B")
+	if err := appairerAB(t, a, b, true, true); err != nil {
+		t.Fatal(err)
+	}
+	jIphone, _ := a.Reg.AjouterTelephone("iPhone de Camil")
+	jIpad, _ := a.Reg.AjouterTelephone("iPad")
+	b.Reg.AjouterTelephone("Tablette")
+	var mu sync.Mutex
+	var copiesB []string
+	b.CopierTexte = func(x string) error { mu.Lock(); copiesB = append(copiesB, x); mu.Unlock(); return nil }
+
+	c := clientEpingle(t, a.ID.CAPEM)
+	base := fmt.Sprintf("https://127.0.0.1:%d", a.Cfg.Port)
+	iphone := func(extra map[string]string) map[string]string {
+		h := map[string]string{"Authorization": "Bearer " + jIphone}
+		for k, v := range extra {
+			h[k] = v
+		}
+		return h
+	}
+
+	// 1. liste proposée dans le Raccourci : ce PC d'abord, sans l'iPhone lui-même
+	_, rep := faire(t, c, "GET", base+"/api/rapide/destinations", iphone(nil), nil)
+	var d struct{ Destinations []string }
+	json.Unmarshal(rep, &d)
+	if strings.Join(d.Destinations, "|") != "PC-A|PC-B|iPad" {
+		t.Fatalf("destinations : %v", d.Destinations)
+	}
+
+	// 2. photo vers PC-B et l'iPad, pas vers PC-A (en-tête encodé comme le ferait un Raccourci)
+	ct, corps := formulaire(t, map[string][]byte{"IMG_0042.HEIC": []byte("photo-heic")})
+	code, rep := faire(t, c, "POST", base+"/api/rapide/fichier", iphone(map[string]string{"Content-Type": ct, "X-Destinations": "PC-B%7CiPad"}), corps)
+	if code != 200 {
+		t.Fatalf("envoi avec destinations : %d %s", code, rep)
+	}
+	recuB := filepath.Join(b.Cfg.DossierReception(), "IMG_0042.HEIC")
+	attendre(t, "relais vers PC-B", func() bool { _, err := os.Stat(recuB); return err == nil })
+	if _, err := os.Stat(filepath.Join(a.Cfg.DossierReception(), "IMG_0042.HEIC")); err == nil {
+		t.Fatal("PC-A n'était pas destinataire")
+	}
+	trouve := false
+	b.mu.Lock()
+	for _, e := range b.evenements {
+		trouve = trouve || strings.Contains(e.Texte, "iPhone de Camil (via PC-A)")
+	}
+	b.mu.Unlock()
+	if !trouve {
+		t.Fatal("PC-B doit afficher l'appareil d'origine")
+	}
+
+	// 3. lien vers PC-B (presse-papiers) et l'iPad (boîte)
+	if code, rep := faire(t, c, "POST", base+"/api/rapide/lien", iphone(map[string]string{"Content-Type": "text/plain", "X-Destinations": "PC-B|iPad"}), []byte("https://exemple.fr/v2")); code != 200 {
+		t.Fatalf("lien : %d %s", code, rep)
+	}
+	attendre(t, "lien copié sur PC-B", func() bool { mu.Lock(); defer mu.Unlock(); return len(copiesB) == 1 })
+
+	// 4. l'iPad récupère sa boîte : le lien dans la réponse, la photo par son URL (une seule fois)
+	ipad := map[string]string{"Authorization": "Bearer " + jIpad}
+	_, rep = faire(t, c, "GET", base+"/api/rapide/boite", ipad, nil)
+	var boite struct {
+		Nombre   int
+		Texte    string
+		Fichiers []struct {
+			URL, Nom, Destination string
+			Album                 bool
+		}
+	}
+	json.Unmarshal(rep, &boite)
+	if boite.Nombre != 2 || boite.Texte != "https://exemple.fr/v2" || len(boite.Fichiers) != 1 || !boite.Fichiers[0].Album || boite.Fichiers[0].Destination != "photos" {
+		t.Fatalf("boîte de l'iPad : %s", rep)
+	}
+	u := boite.Fichiers[0].URL // construite à partir de l'hôte de la requête
+	if code, contenu := faire(t, c, "GET", u, ipad, nil); code != 200 || string(contenu) != "photo-heic" {
+		t.Fatalf("téléchargement : %d", code)
+	}
+	if code, _ := faire(t, c, "GET", u, ipad, nil); code != 404 {
+		t.Fatal("un fichier récupéré doit disparaître")
+	}
+	if code, _ := faire(t, c, "GET", base+"/api/rapide/boite", map[string]string{"Authorization": "Bearer " + b.Secret}, nil); code != 401 {
+		t.Fatal("boîte accessible sans jeton de téléphone")
+	}
+
+	// 5. depuis l'interface de PC-A : un fichier pour l'iPhone (boîte locale) et pour la tablette
+	// de PC-B (relais), découverte comme téléphone distant
+	a.rafraichirDistants(context.Background())
+	if dd := a.telephonesDistants(); len(dd) != 1 || dd[0].Nom != "Tablette" || dd[0].Via != "PC-B" {
+		t.Fatalf("téléphones distants : %+v", dd)
+	}
+	h := &http.Client{Transport: &http.Transport{Proxy: nil}}
+	url := fmt.Sprintf("http://127.0.0.1:%d", a.Cfg.PortControle())
+	ok := map[string]string{"X-Controle": a.Secret}
+	ct, corps = formulaire(t, map[string][]byte{"cours.pdf": []byte("%PDF")})
+	_, rep = faire(t, h, "POST", url+"/controle/televerser", map[string]string{"X-Controle": a.Secret, "Content-Type": ct}, corps)
+	var sel struct{ Selection string }
+	json.Unmarshal(rep, &sel)
+	j, _ := json.Marshal(map[string]any{"cibles": []string{"iPhone de Camil"}, "distants": []distant{{Nom: "Tablette", Via: "PC-B"}}, "selection": sel.Selection})
+	if code, rep := faire(t, h, "POST", url+"/controle/envoyer", ok, j); code != 200 {
+		t.Fatalf("envoi interface : %d %s", code, rep)
+	}
+	if a.Boites.Nombre("iPhone de Camil") != 1 {
+		t.Fatal("rien en attente pour l'iPhone")
+	}
+	attendre(t, "relais vers la tablette de PC-B", func() bool { return b.Boites.Nombre("Tablette") == 1 })
+	if l := b.Boites.Lister("Tablette"); l[0].Nom != "cours.pdf" {
+		t.Fatalf("boîte de la tablette : %+v", l)
+	}
+
+	// 6. retirer l'iPad vide sa boîte
+	a.Boites.DeposerTexte("iPad", "test", "x", false)
+	jr, _ := json.Marshal(map[string]string{"nom": "iPad"})
+	faire(t, h, "POST", url+"/controle/revoquer", ok, jr)
+	if a.Boites.Nombre("iPad") != 0 {
+		t.Fatal("boîte d'un appareil retiré conservée")
+	}
+}
+
+func TestAjoutIphoneSansQR(t *testing.T) {
+	a := creer(t, "PC-A")
+	c := clientEpingle(t, a.ID.CAPEM)
+	base := fmt.Sprintf("https://127.0.0.1:%d", a.Cfg.Port)
+	if code, _ := faire(t, c, "POST", base+"/api/v1/telephone/demande", nil, []byte(`{"nom":"a|b"}`)); code != 400 {
+		t.Fatal("nom avec séparateur accepté")
+	}
+	_, rep := faire(t, c, "POST", base+"/api/v1/telephone/demande", nil, []byte(`{"nom":"iPhone 15"}`))
+	var dem struct{ ID, Code string }
+	json.Unmarshal(rep, &dem)
+	if len(dem.Code) != 6 || dem.ID == "" {
+		t.Fatalf("demande : %s", rep)
+	}
+	if _, rep := faire(t, c, "GET", base+"/api/v1/telephone/demande/"+dem.ID, nil, nil); !strings.Contains(string(rep), `"attente"`) || strings.Contains(string(rep), "jeton") {
+		t.Fatalf("aucun jeton avant acceptation : %s", rep)
+	}
+	l := a.demandesEnAttente()
+	if len(l) != 1 || l[0].Code != dem.Code || l[0].Nom != "iPhone 15" {
+		t.Fatalf("demandes côté PC : %+v", l)
+	}
+	h := &http.Client{Transport: &http.Transport{Proxy: nil}}
+	j, _ := json.Marshal(map[string]any{"id": l[0].Court, "accepter": true})
+	if code, rep := faire(t, h, "POST", fmt.Sprintf("http://127.0.0.1:%d/controle/telephone/demande", a.Cfg.PortControle()), map[string]string{"X-Controle": a.Secret}, j); code != 200 {
+		t.Fatalf("acceptation : %d %s", code, rep)
+	}
+	_, rep = faire(t, c, "GET", base+"/api/v1/telephone/demande/"+dem.ID, nil, nil)
+	var fin struct{ Etat, Jeton, Adresse string }
+	json.Unmarshal(rep, &fin)
+	if fin.Etat != "acceptee" || fin.Jeton == "" || !strings.Contains(fin.Adresse, ".local:") {
+		t.Fatalf("après acceptation : %s", rep)
+	}
+	if acc, ok := a.Reg.Verifier(fin.Jeton); !ok || acc.Nom != "iPhone 15" || acc.Type != "telephone" {
+		t.Fatal("jeton remis invalide")
+	}
+	if code, _ := faire(t, c, "GET", base+"/api/v1/telephone/demande/"+dem.ID, nil, nil); code != 404 {
+		t.Fatal("le jeton ne doit être remis qu'une fois")
+	}
+}
+
+// Annulation : l'envoi s'arrête et le PC receveur efface le fichier partiel.
+func TestAnnulationEnvoi(t *testing.T) {
+	a, b := creer(t, "PC-A"), creer(t, "PC-B")
+	if err := appairerAB(t, a, b, true, true); err != nil {
+		t.Fatal(err)
+	}
+	src := aleatoire(t, t.TempDir(), "film.mov", 40*petitBloc)
+	ctx, annuler := context.WithCancel(context.Background())
+	_, err := client.Envoyer(ctx, a.Reg, "PC-B", []string{src}, client.Options{TailleBloc: petitBloc, Paralleles: 1,
+		Progres: func(fait, _ int64) { annuler() }})
+	if err == nil {
+		t.Fatal("l'envoi annulé ne doit pas réussir")
+	}
+	attendre(t, "abandon côté receveur", func() bool {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		return len(b.receptions) == 0
+	})
+	if _, err := os.Stat(filepath.Join(b.Cfg.DossierReception(), "film.mov")); err == nil {
+		t.Fatal("fichier annulé présent chez le receveur")
+	}
+	if l, _ := filepath.Glob(filepath.Join(b.tmp(), "*")); len(l) != 0 {
+		t.Fatalf("restes de l'envoi annulé : %v", l)
+	}
+	// annulation depuis l'interface, puis boîte d'envoi d'un téléphone vidée
+	h := &http.Client{Transport: &http.Transport{Proxy: nil}}
+	url := fmt.Sprintf("http://127.0.0.1:%d", a.Cfg.PortControle())
+	ok := map[string]string{"X-Controle": a.Secret}
+	if code, _ := faire(t, h, "POST", url+"/controle/envoi/inconnu/annuler", ok, []byte("{}")); code != 404 {
+		t.Fatal("envoi inconnu")
+	}
+	a.Reg.AjouterTelephone("iPhone")
+	a.Boites.DeposerTexte("iPhone", "PC-A", "https://exemple.fr", true)
+	faire(t, h, "POST", url+"/controle/boite/vider", ok, []byte(`{"nom":"iPhone"}`))
+	if a.Boites.Nombre("iPhone") != 0 {
+		t.Fatal("boîte non vidée")
+	}
+}
+
+// QR code : un texte du PC vers le téléphone (page à usage unique avec « Copier ») et un lien du
+// téléphone vers le PC (copié dans le presse-papiers).
+func TestQRTexteDansLesDeuxSens(t *testing.T) {
+	a := creer(t, "PC-A")
+	var copies []string
+	a.CopierTexte = func(x string) error { copies = append(copies, x); return nil }
+	h := &http.Client{Transport: &http.Transport{Proxy: nil}}
+	url := fmt.Sprintf("http://127.0.0.1:%d", a.Cfg.PortControle())
+	ok := map[string]string{"X-Controle": a.Secret}
+	c := clientEpingle(t, a.ID.CAPEM)
+	local := func(u string) string { // l'URL du QR code vise une IP du réseau : on passe par 127.0.0.1
+		i := strings.Index(u, "/p/")
+		return fmt.Sprintf("https://127.0.0.1:%d%s", a.Cfg.Port, u[i:])
+	}
+	var r struct{ Liens []struct{ URL string } }
+	_, rep := faire(t, h, "POST", url+"/controle/partager", ok, []byte(`{"texte":"code wifi : 1234"}`))
+	json.Unmarshal(rep, &r)
+	if len(r.Liens) == 0 {
+		t.Skip("aucune interface réseau dans cet environnement")
+	}
+	code, page := faire(t, c, "GET", local(r.Liens[0].URL), nil, nil)
+	if code != 200 || !strings.Contains(string(page), "code wifi : 1234") || !strings.Contains(string(page), `id="copier"`) {
+		t.Fatalf("page du texte : %d", code)
+	}
+	if code, _ := faire(t, c, "GET", local(r.Liens[0].URL), nil, nil); code != 404 {
+		t.Fatal("le texte ne doit s'afficher qu'une fois")
+	}
+	_, rep = faire(t, h, "POST", url+"/controle/partager", ok, []byte(`{"texte":"https://exemple.fr/doc"}`))
+	json.Unmarshal(rep, &r)
+	if _, page := faire(t, c, "GET", local(r.Liens[0].URL), nil, nil); !strings.Contains(string(page), "Copier le lien") {
+		t.Fatal("bouton Copier le lien absent")
+	}
+	// téléphone -> PC par la page d'envoi
+	_, rep = faire(t, h, "POST", url+"/controle/telephone/envoi", ok, []byte("{}"))
+	json.Unmarshal(rep, &r)
+	if code, rep := faire(t, c, "POST", strings.Replace(local(strings.Replace(r.Liens[0].URL, "/envoyer/", "/p/", 1)), "/p/", "/envoyer/", 1),
+		map[string]string{"Content-Type": "application/json"}, []byte(`{"texte":"https://exemple.fr/depuis-le-telephone"}`)); code != 200 || !strings.Contains(string(rep), `"copie":true`) {
+		t.Fatalf("texte depuis le téléphone : %d %s", code, rep)
+	}
+	if len(copies) != 1 || copies[0] != "https://exemple.fr/depuis-le-telephone" {
+		t.Fatalf("presse-papiers : %v", copies)
+	}
+}
+
+// Hors du réseau local : le PC appairé est joint par une adresse mémorisée (ici 127.0.0.1, comme
+// le serait son adresse Tailscale), même quand la première adresse ne répond pas.
+func TestAdressesMemoriseesEtEssaisParalleles(t *testing.T) {
+	a, b := creer(t, "PC-A"), creer(t, "PC-B")
+	if err := appairerAB(t, a, b, true, true); err != nil {
+		t.Fatal(err)
+	}
+	fp, _, _ := a.Reg.TrouverPC("PC-B")
+	// adresse « de la maison » injoignable (TEST-NET, aucun routage) + adresse mémorisée valable
+	a.Reg.MettreAJourAdresse(fp, "192.0.2.1", b.Cfg.Port)
+	a.Reg.MemoriserAdresses(fp, []string{"127.0.0.1"})
+	debut := time.Now()
+	src := aleatoire(t, t.TempDir(), "note.txt", 1000)
+	if _, err := client.Envoyer(context.Background(), a.Reg, "PC-B", []string{src}, client.Options{}); err != nil {
+		t.Fatalf("envoi par l'adresse mémorisée : %v", err)
+	}
+	if d := time.Since(debut); d > 2*time.Second {
+		t.Fatalf("essais en parallèle trop lents : %v", d)
+	}
+	// une annonce sans adresse utilisable n'efface pas ce qui était mémorisé
+	if _, pc, _ := a.Reg.TrouverPC("PC-B"); len(pc.Adresses) == 0 {
+		t.Fatal("adresses mémorisées effacées")
+	}
+	a.Reg.MemoriserAdresses(fp, []string{"192.168.1.30", "100.101.102.103", "8.8.8.8"})
+	if _, pc, _ := a.Reg.TrouverPC("PC-B"); strings.Join(pc.Adresses, ",") != "100.101.102.103,192.168.1.30" {
+		t.Fatalf("adresses mémorisées : %v", pc.Adresses)
+	}
+}
+
+// App iPhone : avec garder=1 rien n'est retiré avant l'accusé de réception (photo enregistrée).
+func TestAppIphoneGarderEtAccuser(t *testing.T) {
+	a := creer(t, "PC-A")
+	j, _ := a.Reg.AjouterTelephone("iPhone")
+	src := filepath.Join(t.TempDir(), "IMG_1.JPG")
+	os.WriteFile(src, []byte("jpeg"), 0o644)
+	a.Boites.DeposerFichier("iPhone", "PC-A", src, false)
+	a.Boites.DeposerTexte("iPhone", "PC-A", "https://exemple.fr", true)
+	c := clientEpingle(t, a.ID.CAPEM)
+	base := fmt.Sprintf("https://127.0.0.1:%d", a.Cfg.Port)
+	h := map[string]string{"Authorization": "Bearer " + j}
+	var b struct {
+		Nombre   int
+		Elements []struct{ ID, Type, URL, Destination string }
+	}
+	for range 2 { // deux lectures : rien ne disparaît
+		_, rep := faire(t, c, "GET", base+"/api/rapide/boite?garder=1", h, nil)
+		json.Unmarshal(rep, &b)
+		if b.Nombre != 2 {
+			t.Fatalf("garder=1 : %s", rep)
+		}
+	}
+	var f, l string
+	for _, e := range b.Elements {
+		if e.Type == "fichier" {
+			f = e.ID
+		} else {
+			l = e.ID
+		}
+	}
+	if code, x := faire(t, c, "GET", base+"/api/rapide/boite/"+f+"?garder=1", h, nil); code != 200 || string(x) != "jpeg" {
+		t.Fatal("téléchargement")
+	}
+	if a.Boites.Nombre("iPhone") != 2 {
+		t.Fatal("fichier retiré avant l'accusé de réception")
+	}
+	for _, id := range []string{f, l} {
+		if code, _ := faire(t, c, "POST", base+"/api/rapide/boite/"+id+"/recu", h, nil); code != 204 {
+			t.Fatal("accusé de réception refusé")
+		}
+	}
+	// enregistrés : toujours visibles dans « Reçus », mais plus comptés comme nouveaux
+	if a.Boites.Nombre("iPhone") != 2 || a.nouveaux("iPhone") != 0 {
+		t.Fatalf("après enregistrement : %d éléments, %d nouveaux", a.Boites.Nombre("iPhone"), a.nouveaux("iPhone"))
+	}
+	_, rep0 := faire(t, c, "GET", base+"/api/rapide/boite?garder=1", h, nil)
+	if !strings.Contains(string(rep0), `"nombre":0`) || !strings.Contains(string(rep0), `"enregistre":true`) {
+		t.Fatalf("liste Reçus : %s", rep0)
+	}
+	_, rep1 := faire(t, c, "GET", base+"/api/rapide/boite", h, nil) // Raccourci : ne renvoie pas le déjà enregistré
+	if !strings.Contains(string(rep1), `"nombre":0`) {
+		t.Fatalf("Raccourci : %s", rep1)
+	}
+	if code, _ := faire(t, c, "DELETE", base+"/api/rapide/boite/"+f, h, nil); code != 204 || a.Boites.Nombre("iPhone") != 1 {
+		t.Fatal("suppression depuis Reçus")
+	}
+	_, rep := faire(t, c, "GET", base+"/api/rapide/moi", h, nil)
+	if !strings.Contains(string(rep), `"pc":"PC-A"`) || !strings.Contains(string(rep), ".local:") {
+		t.Fatalf("moi : %s", rep)
+	}
+	if code, page := faire(t, c, "GET", base+"/app", nil, nil); code != 200 || !strings.Contains(string(page), "appli.js") {
+		t.Fatal("page de l'app")
+	}
+	if code, m := faire(t, c, "GET", base+"/app.webmanifest", nil, nil); code != 200 || !strings.Contains(string(m), "standalone") {
+		t.Fatal("manifeste")
+	}
+}

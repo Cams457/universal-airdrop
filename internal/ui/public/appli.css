@@ -1,0 +1,120 @@
+/* App iPhone (écran d'accueil) : complète page.css */
+.appli{padding-top:max(.8rem,env(safe-area-inset-top))}
+.barre-appli{display:flex;align-items:center;gap:.65rem;margin:.2rem 0 1.4rem}
+.barre-appli img{border-radius:9px}
+.barre-appli div{display:flex;flex-direction:column;min-width:0}
+.barre-appli .sous{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.appli h1{font-size:1.75rem;margin:.3rem 0 1rem}
+.appli h2{font-size:1.1rem;margin:1.3rem 0 .5rem}
+.appli .carte h2{margin-top:0}
+.centre{text-align:center}
+
+.tuile{display:flex;align-items:center;gap:.9rem;width:100%;padding:1rem;margin:0 0 .8rem;border:0;border-radius:20px;
+  background:var(--carte);box-shadow:var(--ombre);color:inherit;font:inherit;text-align:left;cursor:pointer;transition:transform .12s}
+.tuile:active{transform:scale(.98)}
+.tuile .rond{width:3.3rem;height:3.3rem;margin:0;flex:none}
+.tuile .rond svg{width:1.6rem;height:1.6rem}
+.tuile .infos{flex:1;min-width:0}
+.tuile .sous{white-space:normal}
+.tuile.principale{padding:1.4rem 1.1rem;background:linear-gradient(160deg,var(--accent-2),var(--accent));color:#fff;box-shadow:0 10px 26px rgba(47,111,214,.3)}
+.tuile.principale .rond{background:rgba(255,255,255,.2);color:#fff}
+.tuile.principale .sous{color:rgba(255,255,255,.88)}
+.tuile.principale .grand{font-size:1.35rem}
+.badge{min-width:1.9rem;height:1.9rem;padding:0 .5rem;border-radius:99px;background:#fff;color:var(--accent);font-weight:700;display:grid;place-items:center}
+
+.retour{display:inline-flex;align-items:center;gap:.25rem;border:0;border-radius:99px;background:var(--accent-doux);color:var(--accent);
+  font:inherit;font-size:.98rem;font-weight:600;padding:.45rem .9rem .45rem .7rem;margin:0 0 .4rem;cursor:pointer}
+.retour span{font-size:1.35rem;line-height:1;margin-top:-.1rem}
+.encadre-install h2{margin-bottom:.6rem}
+.encadre-install .bouton{margin-top:.9rem}
+.icone-partage svg{width:1em;height:1em;vertical-align:-.12em}
+.code-grand{font-size:2.3rem;font-weight:700;letter-spacing:.12em;text-align:center;margin:.4rem 0;font-variant-numeric:tabular-nums}
+.deja{margin-top:1rem;color:var(--doux);font-size:.92rem}
+.deja summary{cursor:pointer;color:var(--accent)}
+
+.pastille-bouton{border:0;border-radius:99px;padding:.45rem .85rem;background:var(--accent-doux);color:var(--accent);font:inherit;font-weight:600;font-size:.88rem;white-space:nowrap;cursor:pointer}
+.texte-recu{white-space:normal!important;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.etat-f.erreur{color:var(--erreur)}
+
+#texte{width:100%;margin:0 0 .9rem;padding:.75rem .85rem;border-radius:14px;border:1px solid var(--trait);background:var(--carte);color:inherit;font:inherit;resize:vertical}
+.titre-section{margin:.2rem 0 .45rem;color:var(--doux);font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.puces{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem}
+.puce-choix{border:1.5px solid var(--trait);border-radius:99px;padding:.55rem .95rem;background:var(--carte);color:inherit;font:inherit;font-size:.95rem;cursor:pointer}
+.puce-choix.choisie{border-color:var(--accent);background:var(--accent);color:#fff}
+.ok-texte{text-align:center}
+
+.intro-g{color:var(--doux);font-size:.93rem}
+.pas{padding-left:1.25rem}
+.pas li{margin:.45rem 0;font-size:.95rem}
+.encadre{background:var(--accent-doux);border-radius:12px;padding:.65rem .8rem;margin:.6rem 0;font-size:.9rem}
+.encadre p{margin:.25rem 0}
+.actions-raccourci{width:100%;border-collapse:collapse;font-size:.86rem;margin:.5rem 0;background:var(--carte);border-radius:14px;overflow:hidden}
+.actions-raccourci th,.actions-raccourci td{text-align:left;padding:.45rem .5rem;border-bottom:.5px solid var(--trait);vertical-align:top}
+.actions-raccourci th{color:var(--doux);font-weight:600;font-size:.78rem}
+.actions-raccourci td:first-child{color:var(--doux);width:1.6rem}
+.actions-raccourci td.retrait{padding-left:1.1rem}
+.appli code{font:.84em ui-monospace,"SF Mono",Menlo,monospace;background:var(--fond);padding:.05rem .3rem;border-radius:5px;overflow-wrap:anywhere}
+.pied-appli{text-align:center;margin-top:2rem}
+.lien-discret{border:0;background:none;color:var(--doux);font:inherit;font-size:.85rem;text-decoration:underline;cursor:pointer}
+.ligne-texte{display:flex;gap:.5rem;align-items:flex-start}
+.ligne-texte #texte{flex:1}
+.ligne-texte .pastille-bouton{margin-top:.55rem}
+.etat-ts p{margin:.25rem 0}
+.etat-ts .bouton{margin-top:.7rem}
+.ok-fort{color:var(--ok);font-weight:600}
+.actions-ligne{display:flex;align-items:center;gap:.35rem;flex:none}
+.poubelle{display:grid;place-items:center;width:2.1rem;height:2.1rem;border:0;border-radius:50%;background:transparent;color:var(--doux);cursor:pointer}
+.poubelle svg{width:1.15rem;height:1.15rem}
+.poubelle:active{background:var(--trait)}
+.astuce{font-size:.86rem}
+.pastille-bouton:disabled{opacity:.7}
+.barre-appli .bouton-aide{margin-left:auto;width:2.2rem;height:2.2rem;border-radius:50%;border:1.5px solid var(--accent);background:var(--carte);color:var(--accent);font:inherit;font-weight:700;font-size:1.05rem;flex:none;cursor:pointer}
+.aide-bloc{background:var(--carte);border-radius:16px;box-shadow:var(--ombre);margin:0 0 .7rem;overflow:hidden}
+.aide-bloc summary{list-style:none;display:flex;align-items:center;gap:.7rem;padding:.9rem 1rem;font-weight:600;cursor:pointer}
+.aide-bloc summary::-webkit-details-marker{display:none}
+.aide-bloc summary::after{content:"›";margin-left:auto;color:var(--doux);font-size:1.3rem;transition:transform .2s}
+.aide-bloc[open] summary::after{transform:rotate(90deg)}
+.aide-bloc .corps{padding:0 1rem .9rem}
+.aide-bloc .corps .bouton{margin-top:.6rem}
+.aide-bloc h3{font-size:.95rem;margin:.8rem 0 .3rem}
+.aide-pied{color:var(--doux);font-size:.82rem;text-align:center;margin-top:1rem}
+#liste-recue .nom{white-space:normal;overflow-wrap:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+#liste-recue .infos .sous{white-space:normal}
+#liste-recue .pastille-bouton{padding:.42rem .7rem;font-size:.84rem}
+
+/* Barre d'onglets fixe (comme une app iPhone) */
+.appli.avec-onglets{padding-bottom:calc(5.2rem + env(safe-area-inset-bottom))}
+.onglets{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;justify-content:space-around;
+  padding:.35rem max(.5rem,env(safe-area-inset-right)) calc(.35rem + env(safe-area-inset-bottom)) max(.5rem,env(safe-area-inset-left));
+  background:var(--carte);background:color-mix(in srgb,var(--carte) 88%,transparent);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+  border-top:.5px solid var(--trait)}
+.onglets button{position:relative;display:flex;flex-direction:column;align-items:center;gap:.12rem;flex:1;max-width:6rem;
+  border:0;background:none;color:var(--doux);font:inherit;font-size:.68rem;font-weight:500;padding:.3rem 0;cursor:pointer}
+.onglets button svg{width:1.55rem;height:1.55rem}
+.onglets button.actif{color:var(--accent)}
+.pastille-nb{position:absolute;top:0;left:calc(50% + .45rem);min-width:1.1rem;height:1.1rem;padding:0 .3rem;border-radius:99px;
+  background:#e5484d;color:#fff;font-size:.68rem;font-weight:700;display:grid;place-items:center}
+.appli .bas{bottom:calc(4.6rem + env(safe-area-inset-bottom))}
+.sous-groupe{width:100%;margin:.4rem 0 0;color:var(--doux);font-size:.8rem}
+
+/* Textes et liens : reçus en entier, sélectionnables, copiables */
+.badge.bleu{background:var(--accent);color:#fff}
+.saisie-texte textarea{width:100%;margin:.2rem 0 .7rem;padding:.75rem .85rem;border-radius:14px;border:1px solid var(--trait);background:var(--fond);color:inherit;font:inherit;resize:vertical}
+.actions-texte{display:flex;gap:.6rem;margin-top:.7rem}
+.actions-texte .bouton{flex:1 1 0;width:auto;min-width:0;margin:0;text-align:center}
+.actions-texte .bouton.secondaire{flex:0 0 auto;width:auto;padding-left:1.2rem;padding-right:1.2rem}
+.saisie-texte .actions-texte{margin-top:0}
+#t-etat,#e-ok{white-space:pre-line;margin:.7rem 0 0}
+.texte-carte{padding:.85rem 1rem}
+.texte-carte.nouveau{box-shadow:inset 3px 0 0 var(--accent),var(--ombre)}
+.texte-entete{display:flex;align-items:center;gap:.6rem;margin-bottom:.55rem}
+.texte-entete .vignette{width:2rem;height:2rem;border-radius:9px}
+.texte-entete .vignette svg{width:1.1rem;height:1.1rem}
+.texte-entete .sous{flex:1;min-width:0}
+.texte-plein{white-space:pre-wrap;overflow-wrap:anywhere;font-size:1.02rem;line-height:1.45;max-height:45vh;overflow:auto;
+  padding:.7rem .8rem;border-radius:12px;background:var(--fond);-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+#liste-recue .texte-recu{cursor:pointer}
+.hors-ecran{position:fixed;top:0;left:-9999px;width:1px;height:1px;opacity:0;font-size:16px}
+.astuce-install{position:relative;padding:.85rem 2.6rem .85rem 1rem;font-size:.9rem}
+.astuce-install p{margin:0}
+.astuce-install .fermer{position:absolute;top:.35rem;right:.4rem;width:2rem;height:2rem;border:0;border-radius:50%;background:transparent;color:var(--doux);font-size:1.4rem;line-height:1;cursor:pointer}
