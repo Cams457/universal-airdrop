@@ -34,7 +34,7 @@ from .config import DUREE_APPAIRAGE_S, Config, ecrire_json
 from .decouverte import Decouverte
 from .identite import Identite, empreinte_lisible, empreinte_pem
 from .partage import Partages
-from .reseau import ips_classees, ips_locales, type_reseau
+from .reseau import ips_classees
 
 TAILLE_BLOC_MIN = 64 * 1024
 TAILLE_BLOC_MAX = 16 * 1024 * 1024
@@ -546,8 +546,8 @@ class Service:
                 self.mdns = None
         self._taches.append(asyncio.create_task(self._surveiller()))
         self.journal(f"démon « {self.cfg.nom} » prêt, port {self.cfg.port}, réception dans {self.cfg.dossier_reception}")
-        for ip in sorted(ips_locales(avec_boucle=False)):
-            self.journal(f"   https://{ip}:{self.cfg.port}   ({type_reseau(ip)})")
+        for ip, t in ips_classees():
+            self.journal(f"   https://{ip}:{self.cfg.port}   ({t})")
 
     async def arreter(self) -> None:
         for t in self._taches:

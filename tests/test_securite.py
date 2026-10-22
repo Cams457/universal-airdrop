@@ -100,3 +100,15 @@ def test_integration_windows(tmp_path, monkeypatch):
     assert "envoyer-choisir %*" in crees[0].read_text()
     assert "-m transfert demon" in crees[1].read_text()
     assert len(W.desinstaller()) == 2 and not any(p.exists() for p in crees)
+
+
+def test_reseau_bluetooth(monkeypatch):
+    from transfert import reseau as R
+    monkeypatch.setattr(R, "interfaces", lambda: [
+        ("192.168.1.20", "Wi-Fi"), ("172.20.10.3", "Connexion réseau Bluetooth"),
+        ("192.168.137.1", "Connexion au réseau local* 10"), ("127.0.0.1", "Loopback")])
+    classees = R.ips_classees()
+    assert [ip for ip, _ in classees] == ["192.168.137.1", "192.168.1.20", "172.20.10.3"]
+    assert "Bluetooth" in classees[-1][1]
+    assert R.type_reseau("172.20.10.5", "Wi-Fi") == "partage de connexion de l'iPhone (Wi-Fi ou USB)"
+    assert 2500 < R.duree_estimee_bluetooth(500_000_000) < 2800      # ≈ 45 min pour 500 Mo

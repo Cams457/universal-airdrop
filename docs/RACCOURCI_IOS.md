@@ -80,6 +80,20 @@ le jeton et l'adresse par ceux donnés par `iphone-ajouter` sur ce deuxième PC.
 
 À vérifier chez toi (porte de la V1) : que le nom `.local` se résout bien dans les deux cas.
 
+## En Bluetooth (sans Wi-Fi)
+iOS ne transfère pas de fichiers en Bluetooth vers un PC, mais il **partage sa connexion** en Bluetooth.
+Le PC rejoint ce réseau, et le Raccourci fonctionne tel quel.
+
+1. Appaire une fois l'iPhone et le PC : Paramètres Windows > Bluetooth et appareils > Ajouter un appareil.
+2. Sur l'iPhone : Réglages > Partage de connexion > active « Autoriser d'autres utilisateurs ».
+3. Sur le PC : Paramètres > Bluetooth et appareils > (l'iPhone) > Réseau personnel (PAN) >
+   **Se connecter**, en choisissant « Point d'accès ».
+4. `python -m transfert adresses` doit afficher une ligne « Bluetooth ».
+5. Partager → **PC de Camil**, comme d'habitude.
+
+Débit : 1 à 2 Mbit/s environ. Une photo de 3 Mo prend une vingtaine de secondes, mais une vidéo de
+500 Mo prendrait environ 45 min : garde le Bluetooth pour les liens, les PDF et les photos.
+
 ## Plan B si `pc-de-camil.local` ne répond pas
 Remplace l'action 2 par :
 1. **Obtenir les détails du réseau** > *Nom du réseau* (Wi-Fi) ;

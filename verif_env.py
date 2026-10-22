@@ -76,8 +76,15 @@ def main():
     liste = ips()
     if not liste:
         ligne(False, "aucune IP réseau trouvée : le PC est-il connecté ?")
+    try:
+        import psutil
+        noms = {a.address: nom for nom, adr in psutil.net_if_addrs().items() for a in adr}
+    except ImportError:
+        noms = {}
     for ip in liste:
-        ligne(True, f"{ip}  ->  {type_reseau(ip)}")
+        nom = noms.get(ip, "")
+        bt = "bluetooth" in nom.lower()
+        ligne(True, f"{ip}  ->  {'Bluetooth (1 à 2 Mbit/s)' if bt else type_reseau(ip)}  [{nom}]")
 
     print("\nPorts")
     ligne(port_libre(PORTS[0], "tcp"), f"TCP {PORTS[0]} libre (serveur HTTPS)")

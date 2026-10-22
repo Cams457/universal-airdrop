@@ -176,7 +176,21 @@ def cmd_envoyer(args):
         sys.exit("Introuvable : " + ", ".join(absents))
     if args.paralleles:
         cfg.paralleles = args.paralleles
-    bilans = asyncio.run(envoyer(cfg, ident, appareils, args.cible, chemins, rappel=_barre))
+    total = sum(c.stat().st_size for c in chemins)
+
+    def avant_envoi(ip_pair):
+        from .reseau import duree_estimee_bluetooth, via_bluetooth
+        if not via_bluetooth(ip_pair):
+            return True
+        minutes = duree_estimee_bluetooth(total) / 60
+        print("Attention : le lien vers ce PC passe par le Bluetooth (environ 1 à 2 Mbit/s).")
+        print(f"Durée estimée pour {total / 1e6:.1f} Mo : environ {minutes:.0f} min.")
+        if total < 20e6:
+            return True
+        return input("Continuer quand même ? (o/n) ").strip().lower() == "o"
+
+    bilans = asyncio.run(envoyer(cfg, ident, appareils, args.cible, chemins, rappel=_barre,
+                                 avant_envoi=avant_envoi))
     print()
     for b in bilans:
         reprise = f", reprise : {b.blocs_envoyes}/{b.blocs_total} blocs" if b.blocs_envoyes < b.blocs_total else ""

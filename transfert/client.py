@@ -202,13 +202,16 @@ async def envoyer_fichier(s: aiohttp.ClientSession, base: str, jeton: str, chemi
 
 
 async def envoyer(cfg: Config, identite: Identite, appareils: Appareils, cible: str, chemins: list[Path],
-                  rappel=None, taille_bloc: int = TAILLE_BLOC) -> list[Bilan]:
+                  rappel=None, taille_bloc: int = TAILLE_BLOC, avant_envoi=None) -> list[Bilan]:
+    """avant_envoi(ip_du_pair) -> bool : permet d'annuler, par exemple si le lien est le Bluetooth."""
     fp, info = resoudre(appareils, cible)
     ctx = contexte_client_epingle(info["ca_pem"])
     connecteur = aiohttp.TCPConnector(ssl=ctx, limit=max(cfg.paralleles, 1) + 1)
     timeout = aiohttp.ClientTimeout(total=None, sock_connect=5, sock_read=120)
     async with aiohttp.ClientSession(connector=connecteur, timeout=timeout) as s:
         base = await _joindre(s, _candidats(cfg, fp, info), ctx)
+        if avant_envoi and not avant_envoi(base.split("//")[1].rsplit(":", 1)[0]):
+            raise ErreurTransfert("envoi annulé")
         bilans = []
         for chemin in chemins:
             bilans.append(await envoyer_fichier(s, base, info["jeton_sortant"], Path(chemin),

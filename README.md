@@ -1,7 +1,16 @@
 # universal-airdrop
 
 Un « AirDrop » maison entre PC Windows et iPhone : PDF, photos, vidéos et liens, sur le réseau local,
-**chiffré, authentifié et rapide**. Il fonctionne via la box ou en **partage de connexion**, sans Internet.
+**chiffré, authentifié et rapide**. Il fonctionne via la box, en **partage de connexion** Wi-Fi, ou en
+**Bluetooth**, sans Internet.
+
+| Lien | Débit utile estimé | Usage |
+|---|---|---|
+| Wi-Fi (box ou partage de connexion) | 150 à 400 Mbit/s | tout, vidéos comprises |
+| Bluetooth (partage de connexion de l'iPhone, PAN) | 1 à 2 Mbit/s | liens, PDF, photos |
+
+Le Bluetooth passe par le partage de connexion de l'iPhone, car iOS n'offre pas de transfert de
+fichiers Bluetooth vers un PC. Le protocole reste le même : HTTPS sur IP.
 
 Sur l'iPhone : **Partager → PC de Camil**, et c'est envoyé.
 
@@ -108,7 +117,7 @@ transfert/
   profil_ios.py  profil .mobileconfig pour l'iPhone
   windows.py     « Envoyer vers » et démarrage automatique
 v0/              V0 : envoi TCP minimal en clair (étape d'apprentissage)
-tests/           pytest : 33 tests, dont deux démons réels en HTTPS
+tests/           pytest : 34 tests, dont deux démons réels en HTTPS
 ```
 
 Tests : `python -m pip install pytest` puis `python -m pytest`.
@@ -126,3 +135,4 @@ Tests : `python -m pip install pytest` puis `python -m pytest`.
 | V5 — Sécurité | fait et testé dès la V1 (HTTPS, épinglage, jetons, code avec engagement) |
 | V6 — Intégration Windows | « Envoyer vers » et démarrage faits ; icône de notification à faire |
 | Partage de connexion | fait (multi-interfaces, certificat réémis à chaud, Bonjour) ; à tester sur le terrain |
+| Bluetooth | fait (via le PAN du partage de l'iPhone, interface reconnue, avertissement de débit) ; à tester |
