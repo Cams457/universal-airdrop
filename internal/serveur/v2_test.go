@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Cams457/universal-airdrop/internal/client"
 )
 
 func attendre(t *testing.T, quoi string, cond func() bool) {
@@ -179,5 +181,44 @@ func TestAjoutIphoneSansQR(t *testing.T) {
 	}
 	if code, _ := faire(t, c, "GET", base+"/api/v1/telephone/demande/"+dem.ID, nil, nil); code != 404 {
 		t.Fatal("le jeton ne doit être remis qu'une fois")
+	}
+}
+
+// Annulation : l'envoi s'arrête et le PC receveur efface le fichier partiel.
+func TestAnnulationEnvoi(t *testing.T) {
+	a, b := creer(t, "PC-A"), creer(t, "PC-B")
+	if err := appairerAB(t, a, b, true, true); err != nil {
+		t.Fatal(err)
+	}
+	src := aleatoire(t, t.TempDir(), "film.mov", 40*petitBloc)
+	ctx, annuler := context.WithCancel(context.Background())
+	_, err := client.Envoyer(ctx, a.Reg, "PC-B", []string{src}, client.Options{TailleBloc: petitBloc, Paralleles: 1,
+		Progres: func(fait, _ int64) { annuler() }})
+	if err == nil {
+		t.Fatal("l'envoi annulé ne doit pas réussir")
+	}
+	attendre(t, "abandon côté receveur", func() bool {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		return len(b.receptions) == 0
+	})
+	if _, err := os.Stat(filepath.Join(b.Cfg.DossierReception(), "film.mov")); err == nil {
+		t.Fatal("fichier annulé présent chez le receveur")
+	}
+	if l, _ := filepath.Glob(filepath.Join(b.tmp(), "*")); len(l) != 0 {
+		t.Fatalf("restes de l'envoi annulé : %v", l)
+	}
+	// annulation depuis l'interface, puis boîte d'envoi d'un téléphone vidée
+	h := &http.Client{Transport: &http.Transport{Proxy: nil}}
+	url := fmt.Sprintf("http://127.0.0.1:%d", a.Cfg.PortControle())
+	ok := map[string]string{"X-Controle": a.Secret}
+	if code, _ := faire(t, h, "POST", url+"/controle/envoi/inconnu/annuler", ok, []byte("{}")); code != 404 {
+		t.Fatal("envoi inconnu")
+	}
+	a.Reg.AjouterTelephone("iPhone")
+	a.Boites.DeposerTexte("iPhone", "PC-A", "https://exemple.fr", true)
+	faire(t, h, "POST", url+"/controle/boite/vider", ok, []byte(`{"nom":"iPhone"}`))
+	if a.Boites.Nombre("iPhone") != 0 {
+		t.Fatal("boîte non vidée")
 	}
 }

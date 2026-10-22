@@ -46,6 +46,8 @@ type envoi struct {
 	Erreur   string
 	Mbits    float64
 	Bilans   []client.Bilan
+	Annule   bool
+	annuler  context.CancelFunc
 }
 
 type vueEnvoi struct {
@@ -58,6 +60,7 @@ type vueEnvoi struct {
 	Fini     bool      `json:"fini"`
 	Erreur   string    `json:"erreur,omitempty"`
 	Mbits    float64   `json:"mbits"`
+	Annule   bool      `json:"annule"`
 }
 
 type appairageA struct {
@@ -124,6 +127,8 @@ func (s *Service) routesControle() http.Handler {
 	m.HandleFunc("POST /controle/telephone/envoi", s.cEnvoiTelephone)
 	m.HandleFunc("POST /controle/revoquer", s.cRevoquer)
 	m.HandleFunc("POST /controle/telephone/demande", s.cDecisionDemande)
+	m.HandleFunc("POST /controle/envoi/{id}/annuler", s.cAnnulerEnvoi)
+	m.HandleFunc("POST /controle/boite/vider", s.cViderBoite)
 	m.HandleFunc("GET /controle/telephone/page", s.cPageIphone)
 	m.HandleFunc("POST /controle/quitter", func(w http.ResponseWriter, r *http.Request) {
 		ecrireJSON(w, 200, map[string]bool{"ok": true})
@@ -162,7 +167,7 @@ func (s *Service) cEtat(w http.ResponseWriter, r *http.Request) {
 	envois := []vueEnvoi{} // copies prises sous verrou : l'envoi continue pendant l'encodage
 	for _, e := range s.envois {
 		envois = append(envois, vueEnvoi{ID: e.ID, Cible: e.Cible, Fichiers: e.Fichiers, Total: e.Total,
-			Fait: e.FaitA.Load(), Debut: e.Debut, Fini: e.Fini, Erreur: e.Erreur, Mbits: e.Mbits})
+			Fait: e.FaitA.Load(), Debut: e.Debut, Fini: e.Fini, Erreur: e.Erreur, Mbits: e.Mbits, Annule: e.Annule})
 	}
 	s.mu.Unlock()
 	vus := map[string]string{}
@@ -593,23 +598,65 @@ func (s *Service) cEnvoyer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) executerEnvoi(e *envoi, pc string, chemins []string, o client.Options) {
+	ctx, annuler := context.WithCancel(context.Background())
+	defer annuler()
+	s.mu.Lock()
+	e.annuler = annuler
+	s.mu.Unlock()
 	o.Paralleles, o.Source = s.Cfg.Paralleles, s.Source()
 	o.Progres = func(fait, _ int64) { e.FaitA.Store(fait) }
-	bilans, err := client.Envoyer(context.Background(), s.Reg, pc, chemins, o)
+	bilans, err := client.Envoyer(ctx, s.Reg, pc, chemins, o)
 	duree := time.Since(e.Debut)
+	annule := ctx.Err() != nil
 	s.mu.Lock()
-	e.Fini, e.Bilans = true, bilans
-	if err != nil {
+	e.Fini, e.Bilans, e.Annule = true, bilans, annule
+	if err != nil && !annule {
 		e.Erreur = err.Error()
-	} else if duree > 0 {
+	} else if err == nil && duree > 0 {
 		e.Mbits = 8 * float64(e.Total) / duree.Seconds() / 1e6
 	}
 	s.mu.Unlock()
-	if err != nil {
+	switch {
+	case annule:
+		s.Evenement("info", fmt.Sprintf("Envoi vers « %s » annulé", e.Cible), "")
+	case err != nil:
 		s.Evenement("erreur", fmt.Sprintf("Envoi vers « %s » échoué : %s", e.Cible, err), "")
-	} else {
+	default:
 		s.Evenement("envoye", fmt.Sprintf("Envoyé à « %s » : %d fichier(s), %s", e.Cible, len(chemins), TailleLisible(e.Total)), "")
 	}
+}
+
+// cAnnulerEnvoi interrompt un envoi en cours ; le PC receveur efface ce qu'il avait déjà reçu.
+func (s *Service) cAnnulerEnvoi(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	e, ok := s.envois[r.PathValue("id")]
+	var annuler context.CancelFunc
+	if ok && !e.Fini {
+		annuler = e.annuler
+	}
+	s.mu.Unlock()
+	if !ok {
+		erreur(w, http.StatusNotFound, "envoi inconnu")
+		return
+	}
+	if annuler != nil {
+		annuler()
+	}
+	ecrireJSON(w, 200, map[string]bool{"ok": true})
+}
+
+// cViderBoite annule ce qui attend encore un téléphone (pas encore récupéré par « Recevoir »).
+func (s *Service) cViderBoite(w http.ResponseWriter, r *http.Request) {
+	var c struct {
+		Nom string `json:"nom"`
+	}
+	if !lireJSON(w, r, &c) {
+		return
+	}
+	n := s.Boites.Nombre(c.Nom)
+	s.Boites.Vider(c.Nom)
+	s.Evenement("info", fmt.Sprintf("Envoi en attente pour « %s » annulé (%d élément(s))", c.Nom, n), "")
+	ecrireJSON(w, 200, map[string]int{"annules": n})
 }
 
 // cLien envoie un lien ou un texte à un ou plusieurs appareils ; il y est copié dans le

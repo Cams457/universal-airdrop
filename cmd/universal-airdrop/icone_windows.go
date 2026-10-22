@@ -56,6 +56,7 @@ func icone(s *serveur.Service) {
 		ouvrir := systray.AddMenuItem("Ouvrir Universal Airdrop", "")
 		recevoir := systray.AddMenuItem("Recevoir depuis un téléphone…", "Affiche un QR code à scanner")
 		dossier := systray.AddMenuItem("Ouvrir le dossier de réception", "")
+		guide := systray.AddMenuItem("Guide d'installation…", "Installer, relier l'iPhone, Raccourcis")
 		systray.AddSeparator()
 		quitter := systray.AddMenuItem("Quitter", "")
 		go func() {
@@ -65,6 +66,8 @@ func icone(s *serveur.Service) {
 					ouvrirUI("")
 				case <-recevoir.ClickedCh:
 					ouvrirUI("?action=recevoir")
+				case <-guide.ClickedCh:
+					ouvrirUI("?action=guide")
 				case <-dossier.ClickedCh:
 					_ = os.MkdirAll(s.Cfg.DossierReception(), 0o755)
 					_ = systeme.OuvrirDossier(s.Cfg.DossierReception())

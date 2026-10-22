@@ -22,7 +22,8 @@ dessus rouvre l'application.
 
 **Nouveau en v2 :** plus de QR code entre tes appareils. Tu coches les destinataires (plusieurs à la fois),
 l'iPhone a ses deux Raccourcis *Envoyer* et *Recevoir*, un lien arrive dans le presse-papiers de l'autre
-appareil, et un PC relaie vers les autres PC et leurs téléphones.
+appareil, et un PC relaie vers les autres PC et leurs téléphones. Le bouton **?** en haut de la fenêtre
+rouvre le guide d'installation pas à pas (PC, iPhone, Raccourcis) ; un envoi en cours s'**annule** d'un clic.
 
 | Je veux… | Comment |
 |---|---|

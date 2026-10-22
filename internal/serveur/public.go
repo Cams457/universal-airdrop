@@ -88,6 +88,7 @@ func (s *Service) routesPubliques() http.Handler {
 	m.HandleFunc("POST /api/v1/transfert/preparer", s.transfertPreparer)
 	m.HandleFunc("PUT /api/v1/transfert/{ident}/bloc/{i}", s.transfertBloc)
 	m.HandleFunc("POST /api/v1/transfert/{ident}/terminer", s.transfertTerminer)
+	m.HandleFunc("DELETE /api/v1/transfert/{ident}", s.transfertAbandonner)
 	m.HandleFunc("POST /api/rapide/fichier", s.rapideFichier)
 	m.HandleFunc("POST /api/rapide/lien", s.rapideLien)
 	m.HandleFunc("GET /api/rapide/destinations", s.rDestinations)
@@ -237,6 +238,24 @@ func (s *Service) transfertBloc(w http.ResponseWriter, r *http.Request) {
 		erreur(w, http.StatusUnprocessableEntity, raison)
 		return
 	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// transfertAbandonner : l'expéditeur a annulé ; on efface le fichier partiel et son état.
+func (s *Service) transfertAbandonner(w http.ResponseWriter, r *http.Request) {
+	a, cle, ok := s.authentifier(w, r)
+	if !ok {
+		return
+	}
+	rec := s.reception(w, r, cle)
+	if rec == nil {
+		return
+	}
+	s.mu.Lock()
+	delete(s.receptions, r.PathValue("ident"))
+	s.mu.Unlock()
+	rec.Abandonner()
+	s.Evenement("info", fmt.Sprintf("« %s » a annulé son envoi", a.Nom), "")
 	w.WriteHeader(http.StatusNoContent)
 }
 

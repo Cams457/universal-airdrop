@@ -87,3 +87,31 @@ ol.guide{padding-left:1.2rem;margin:.5rem 0} ol.guide li{margin:.35rem 0}
 .adresse-grande{font-family:Consolas,ui-monospace,monospace;font-size:1.15rem;font-weight:600;text-align:center;background:var(--accent-doux);color:var(--accent);padding:.7rem;border-radius:10px;word-break:break-all;user-select:all}
 .code-grand{font-size:2.2rem;font-weight:700;letter-spacing:.12em;text-align:center;margin:.4rem 0;font-variant-numeric:tabular-nums}
 .guide li{margin:.35rem 0}
+
+/* Bouton « ? » et guide */
+.droite{display:flex;align-items:center;gap:.75rem}
+.bouton-aide{width:2.1rem;height:2.1rem;border-radius:50%;border:1.5px solid var(--accent);background:var(--carte);color:var(--accent);font:inherit;font-weight:700;font-size:1.05rem;cursor:pointer;flex:none}
+.bouton-aide:hover{background:var(--accent);color:#fff}
+dialog.large{max-width:min(46rem,calc(100vw - 2rem))}
+.sommaire{list-style:none;margin:.5rem 0 0;padding:0}
+.sommaire li{margin:0}
+.sommaire button{display:flex;align-items:center;gap:.75rem;width:100%;padding:.7rem .8rem;border:0;border-radius:10px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.sommaire button:hover{background:var(--accent-doux)}
+.sommaire .num{display:grid;place-items:center;width:1.7rem;height:1.7rem;border-radius:50%;background:var(--fond);font-weight:700;font-size:.85rem;flex:none}
+.sommaire .num.fait{background:var(--ok);color:#fff}
+.sommaire .titre{font-weight:600}
+.sommaire .sous{display:block;color:var(--doux);font-size:.83rem;font-weight:400}
+.chapitre h2{margin-top:.2rem}
+.chapitre .fil{color:var(--doux);font-size:.82rem;margin:0}
+.chapitre ol.pas{padding-left:1.3rem}
+.chapitre ol.pas li{margin:.45rem 0}
+.chapitre code{font-family:Consolas,ui-monospace,monospace;font-size:.86em;background:var(--fond);padding:.08rem .35rem;border-radius:5px;word-break:break-all}
+.actions-raccourci{width:100%;border-collapse:collapse;font-size:.86rem;margin:.6rem 0}
+.actions-raccourci th,.actions-raccourci td{text-align:left;padding:.42rem .45rem;border-bottom:1px solid var(--bord);vertical-align:top}
+.actions-raccourci th{color:var(--doux);font-weight:600;font-size:.8rem}
+.actions-raccourci td:first-child{color:var(--doux);width:2rem}
+.actions-raccourci td.retrait{padding-left:1.4rem}
+.encadre{background:var(--accent-doux);border-radius:10px;padding:.65rem .8rem;margin:.6rem 0;font-size:.88rem}
+.encadre p{margin:.2rem 0}
+.nav-guide{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-top:1rem;flex-wrap:wrap}
+.barre.annulee div{background:var(--doux)}

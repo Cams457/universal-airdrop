@@ -488,6 +488,10 @@ func (cx *Connexion) envoyerFichier(ctx context.Context, chemin string, o Option
 		}()
 	}
 	wg.Wait()
+	if ctx.Err() != nil { // annulé : le receveur efface le fichier partiel
+		cx.abandonner(prep.ID)
+		return Bilan{}, ctx.Err()
+	}
 	if erreur != nil {
 		return Bilan{}, erreur
 	}
@@ -505,6 +509,19 @@ func (cx *Connexion) envoyerFichier(ctx context.Context, chemin string, o Option
 	}
 	return Bilan{Nom: filepath.Base(chemin), Taille: taille, Duree: duree, Demarrage: dem,
 		BlocsEnvoyes: len(prep.Manquants), BlocsTotal: int(n), NomRecu: fin.Nom}, nil
+}
+
+// abandonner prévient le receveur d'une annulation (au mieux : 3 secondes maximum).
+func (cx *Connexion) abandonner(ident string) {
+	ctx, fin := context.WithTimeout(context.Background(), 3*time.Second)
+	defer fin()
+	req, _ := http.NewRequestWithContext(ctx, "DELETE", cx.Base+"/api/v1/transfert/"+ident, nil)
+	for k, v := range cx.auth() {
+		req.Header.Set(k, v)
+	}
+	if r, err := cx.Client.Do(req); err == nil {
+		r.Body.Close()
+	}
 }
 
 func (cx *Connexion) envoyerBloc(ctx context.Context, ident string, i int64, donnees []byte, h string, enVol chan struct{}) error {

@@ -52,8 +52,9 @@
   // ---------- fenêtre modale ----------
   var fenetre = $("fenetre");
   var surFermeture = null;
-  fenetre.addEventListener("close", function () { if (surFermeture) { var f = surFermeture; surFermeture = null; f(); } });
+  fenetre.addEventListener("close", function () { fenetre.classList.remove("large"); if (surFermeture) { var f = surFermeture; surFermeture = null; f(); } });
   function ouvrir(contenu, fermeture) {
+    fenetre.classList.remove("large");
     var c = vider($("contenu-fenetre"));
     c.appendChild(contenu);
     surFermeture = fermeture || null;
@@ -103,9 +104,13 @@
     (etat.appareils || []).forEach(function (a) {
       var n = (etat.en_attente || {})[a.nom] || 0;
       var etiquette = a.type === "pc" ? (enLigne(a) ? "PC · en ligne" : "PC · hors ligne") : "téléphone" + (n ? " · " + n + " en attente" : "");
+      var vider_ = n ? el("button", { classe: "lien-discret", texte: "Annuler l'envoi en attente", onclick: function () {
+        if (!confirm("Annuler les " + n + " élément(s) que « " + a.nom + " » n'a pas encore récupérés ?")) return;
+        api("/controle/boite/vider", { nom: a.nom }).then(rafraichir).catch(function (x) { alert(x.message); });
+      } }) : null;
       l.appendChild(el("div", { classe: "ligne" },
         el("span", { classe: "nom" }, el("span", { classe: "point" + (a.type === "pc" && enLigne(a) ? " en-ligne" : "") }), a.nom),
-        el("span", { classe: "rangee" }, el("span", { classe: "doux", texte: etiquette }),
+        el("span", { classe: "rangee" }, el("span", { classe: "doux", texte: etiquette }), vider_,
           el("button", { classe: "lien-discret danger", texte: "Retirer", onclick: function () { retirer(a.nom); } }))));
     });
 
@@ -126,12 +131,16 @@
     var lv = vider($("envois"));
     (etat.envois || []).sort(function (a, b) { return a.debut < b.debut ? 1 : -1; }).slice(0, 4).forEach(function (e) {
       var pct = e.total ? Math.round(100 * e.fait / e.total) : 100;
-      var t = e.erreur ? "Échec : " + e.erreur : e.fini ? "Envoyé ✓ · " + Math.round(e.mbits) + " Mbit/s" : pct + " % · " + taille(e.fait) + " sur " + taille(e.total);
-      var barre = el("div", { classe: "barre" }, el("div"));
+      var t = e.annule ? "Annulé" : e.erreur ? "Échec : " + e.erreur : e.fini ? "Envoyé ✓ · " + Math.round(e.mbits) + " Mbit/s" : pct + " % · " + taille(e.fait) + " sur " + taille(e.total);
+      var barre = el("div", { classe: "barre" + (e.annule ? " annulee" : "") }, el("div"));
       barre.firstChild.style.width = (e.erreur ? 100 : pct) + "%";
+      var annuler = e.fini ? null : el("button", { classe: "lien-discret danger", texte: "Annuler", onclick: function () {
+        this.disabled = true;
+        api("/controle/envoi/" + encodeURIComponent(e.id) + "/annuler", {}).then(rafraichir).catch(function (x) { alert(x.message); });
+      } });
       lv.appendChild(el("div", { classe: "envoi" },
-        el("div", { classe: "ligne" }, el("span", { classe: "nom", texte: "Vers « " + e.cible + " » · " + e.fichiers + " fichier(s)" })),
-        barre, el("p", { classe: e.erreur ? "erreur" : e.fini ? "ok" : "doux", texte: t })));
+        el("div", { classe: "ligne" }, el("span", { classe: "nom", texte: "Vers « " + e.cible + " » · " + e.fichiers + " fichier(s)" }), annuler),
+        barre, el("p", { classe: e.annule ? "doux" : e.erreur ? "erreur" : e.fini ? "ok" : "doux", texte: t })));
     });
 
     // infos
@@ -154,7 +163,8 @@
     $("lien-raccourci").value = etat.lien_raccourci || "";
     var params = new URLSearchParams(location.search);
     var sel = params.get("sel");
-    if (params.get("action") === "recevoir") { history.replaceState(null, "", location.pathname); $("recevoir-telephone").click(); }
+    if (params.get("action") === "guide") { history.replaceState(null, "", location.pathname); ouvrirGuide(); }
+    else if (params.get("action") === "recevoir") { history.replaceState(null, "", location.pathname); $("recevoir-telephone").click(); }
     else if (sel) {
       api("/controle/selection/" + sel).then(function (r) { montrerSelection(sel, r.fichiers); })
         .catch(function (e) { alert(e.message); });
@@ -371,6 +381,177 @@
           el("button", { classe: "bouton", texte: "Accepter", onclick: function () { decider(true); } }))));
     });
   }
+
+  // ---------- guide (bouton « ? ») ----------
+  // Texte avec `code`, **gras** et *italique*, sans HTML injecté.
+  function riche(t) {
+    var s = el("span"), re = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g, i = 0, m;
+    while ((m = re.exec(t))) {
+      if (m.index > i) s.appendChild(document.createTextNode(t.slice(i, m.index)));
+      var x = m[0];
+      s.appendChild(x[0] === "`" ? el("code", { texte: x.slice(1, -1) })
+        : x[1] === "*" ? el("strong", { texte: x.slice(2, -2) }) : el("em", { texte: x.slice(1, -1) }));
+      i = m.index + x.length;
+    }
+    if (i < t.length) s.appendChild(document.createTextNode(t.slice(i)));
+    return s;
+  }
+  function pas(liste) { var o = el("ol", { classe: "pas" }); liste.forEach(function (t) { o.appendChild(el("li", null, riche(t))); }); return o; }
+  function tableActions(lignes) {
+    var t = el("table", { classe: "actions-raccourci" }, el("tr", null, el("th", { texte: "#" }), el("th", { texte: "Action à ajouter" }), el("th", { texte: "Réglage" })));
+    lignes.forEach(function (l, i) {
+      var r = el("tr", null, el("td", { texte: String(i + 1) }), el("td", { classe: l[2] ? "retrait" : "" }, riche((l[2] ? "↳ ".repeat(l[2]) : "") + "**" + l[0] + "**")), el("td", null, riche(l[1])));
+      t.appendChild(r);
+    });
+    return t;
+  }
+  function encadre(lignes) { var d = el("div", { classe: "encadre" }); lignes.forEach(function (t) { d.appendChild(el("p", null, riche(t))); }); return d; }
+
+  var REGLAGES = [
+    "**Réglages G** (touche « Afficher plus » sur l'action) : méthode **GET** ; en-tête `Authorization` = `Bearer ` (avec l'espace) suivi de la variable `Jeton`.",
+    "**Réglages L** (lien ou texte) : méthode **POST** ; en-têtes `Authorization` = `Bearer ` + `Jeton` et `X-Destinations` = `Destinations` ; corps **JSON** avec un champ Texte de clé `texte` et de valeur *Élément répété*.",
+    "**Réglages F** (fichier) : méthode **POST** ; mêmes en-têtes ; corps **Formulaire** avec un champ **Fichier** de clé `fichier` et de valeur *Élément répété*."
+  ];
+
+  function chapitres() {
+    var sy = etat.systeme || {}, tels = (etat.appareils || []).filter(function (a) { return a.type === "telephone"; });
+    return [
+      { titre: "Installer sur ce PC", sous: "nom, pare-feu, démarrage automatique", fait: !!etat.configure && (!sy.pris_en_charge || sy.pare_feu),
+        corps: function () {
+          return [pas([
+            "Donne un nom à ce PC : c'est ce que verront tes autres appareils (actuellement **" + etat.nom + "**).",
+            "**Autoriser** la réception dans le pare-feu de Windows (fenêtre « Oui »). Seul ton réseau local est autorisé, jamais Internet." + (sy.pris_en_charge ? (sy.pare_feu ? " — déjà fait ✓" : " — **pas encore fait**") : ""),
+            "Facultatif : lancement au démarrage de Windows, et « Envoyer vers » dans le clic droit sur un fichier.",
+            "Sur chaque autre PC : télécharge le même `UniversalAirdrop.exe` et refais ces étapes."]),
+            el("div", { classe: "boutons gauche" }, el("button", { classe: "bouton", texte: "Lancer l'assistant d'installation", onclick: assistant }))];
+        } },
+      { titre: "Relier ton iPhone", sous: "certificat du PC, puis code à 6 chiffres", fait: tels.length > 0,
+        corps: function () {
+          var adr = el("p", { classe: "adresse-grande", texte: "…" });
+          api("/controle/telephone/page").then(function (r) { adr.textContent = r.liens[0].url; }).catch(function () {});
+          return [el("p", { texte: "Sur l'iPhone, ouvre Safari et tape cette adresse, avec https:// au début :" }), adr,
+            pas(["Si Safari parle de connexion non privée : **Afficher les détails**, puis **visiter ce site web** (normal avant l'étape 3).",
+              "**Télécharger le profil**, puis **Autoriser**.",
+              "**Réglages** › **Profil téléchargé** › **Installer**. Absent ? **Général** › **VPN et gestion de l'appareil**. iOS l'efface au bout de 8 minutes s'il n'est pas installé.",
+              "**Réglages** › **Général** › **Informations** › **Réglages des certificats** : active *Universal Airdrop CA*. Vérifie que l'empreinte SHA-256 est celle de la carte « Ce PC ».",
+              "**Relier cet iPhone** : donne-lui un nom. Une fenêtre s'ouvre ici avec un code : s'il est identique à celui de l'iPhone, **Accepter**.",
+              "Copie l'**adresse du PC** et le **jeton** affichés sur l'iPhone : les Raccourcis les demandent."]),
+            el("div", { classe: "boutons gauche" }, el("button", { classe: "bouton secondaire", texte: "Afficher aussi un QR code", onclick: function () { assistantIphone(); } }))];
+        } },
+      { titre: "Raccourci « Envoyer »", sous: "Partager → Envoyer, en choisissant les appareils", fait: false,
+        corps: function () {
+          return [encadre(["App **Raccourcis** › **+** › renomme-le `Envoyer`. Touche **(i)** : active **Afficher dans la feuille de partage** ; types acceptés : *Images, Médias, Fichiers, URL, Texte* ; si aucune entrée : **Arrêter et répondre**."]),
+            tableActions([
+              ["Texte", "colle l'**adresse du PC**, ex. `https://pc-de-camil.local:47800`"],
+              ["Définir la variable", "nom `Adresse`, valeur *Texte*"],
+              ["Texte", "colle ton **jeton**"],
+              ["Définir la variable", "nom `Jeton`, valeur *Texte*"],
+              ["Obtenir le contenu de l'URL", "`Adresse` puis `/api/rapide/destinations` · Réglages G"],
+              ["Obtenir la valeur du dictionnaire", "Valeur pour la clé `destinations`"],
+              ["Choisir dans la liste", "invite `Envoyer à…` ; active **Sélectionner plusieurs**"],
+              ["Combiner le texte", "séparateur **Personnalisé** `|`"],
+              ["Encoder l'URL", "*Texte combiné* (en anglais : URL Encode)"],
+              ["Définir la variable", "nom `Destinations`"],
+              ["Répéter avec chaque élément", "dans *Entrée du raccourci*"],
+              ["Obtenir le type", "de *Élément répété*", 1],
+              ["Si", "*Type* est `URL`, **Ajouter une condition** : *Type* est `Texte`, **N'importe laquelle**", 1],
+              ["Obtenir le contenu de l'URL", "`Adresse` puis `/api/rapide/lien` · Réglages L", 2],
+              ["Sinon", "", 1],
+              ["Obtenir le contenu de l'URL", "`Adresse` puis `/api/rapide/fichier` · Réglages F", 2],
+              ["Fin si", "", 1],
+              ["Fin de la répétition", ""],
+              ["Afficher une notification", "`Envoyé ✓`"]]),
+            encadre(REGLAGES),
+            el("p", { classe: "doux", texte: "Essai : Photos › une photo › Partager › Envoyer › coche ce PC. La première fois : « Toujours autoriser ». Pour l'avoir en tête : feuille de partage › Modifier les actions › + devant Envoyer." })];
+        } },
+      { titre: "Raccourci « Recevoir »", sous: "photos dans Photos, liens copiés", fait: false,
+        corps: function () {
+          return [encadre(["**+** › renomme-le `Recevoir` (pas besoin de la feuille de partage). Les actions 1 à 4 sont les mêmes que pour Envoyer."]),
+            tableActions([
+              ["Texte", "l'adresse du PC"], ["Définir la variable", "`Adresse`"], ["Texte", "ton jeton"], ["Définir la variable", "`Jeton`"],
+              ["Obtenir le contenu de l'URL", "`Adresse` puis `/api/rapide/boite` · Réglages G"],
+              ["Définir la variable", "nom `Boite`"],
+              ["Obtenir la valeur du dictionnaire", "clé `texte` dans `Boite`"],
+              ["Si", "*Valeur du dictionnaire* **a une valeur**"],
+              ["Copier dans le presse-papiers", "*Valeur du dictionnaire*", 1],
+              ["Fin si", ""],
+              ["Obtenir la valeur du dictionnaire", "clé `fichiers` dans `Boite`"],
+              ["Répéter avec chaque élément", "dans *Valeur du dictionnaire*"],
+              ["Obtenir la valeur du dictionnaire", "clé `url` dans *Élément répété*", 1],
+              ["Obtenir le contenu de l'URL", "*Valeur du dictionnaire* · Réglages G", 1],
+              ["Définir la variable", "nom `Fichier`", 1],
+              ["Obtenir la valeur du dictionnaire", "clé `destination` dans *Élément répété*", 1],
+              ["Si", "*Valeur du dictionnaire* est `photos`", 1],
+              ["Enregistrer dans l'album photo", "`Fichier`", 2],
+              ["Sinon", "", 1],
+              ["Enregistrer le fichier", "`Fichier` ; désactive **Demander où enregistrer** ; dossier `Universal Airdrop`", 2],
+              ["Fin si", "", 1],
+              ["Fin de la répétition", ""],
+              ["Obtenir la valeur du dictionnaire", "clé `resume` dans `Boite`"],
+              ["Afficher une notification", "*Valeur du dictionnaire*"]]),
+            el("p", { classe: "doux", texte: "Essai : sur ce PC, glisse une photo, coche ton iPhone, Envoyer ; puis lance Recevoir sur l'iPhone." })];
+        } },
+      { titre: "Lancer « Recevoir » tout seul", sous: "en arrivant sur le Wi-Fi, ou d'un geste", fait: false,
+        corps: function () {
+          return [pas([
+            "**En arrivant à la maison** : Raccourcis › **Automatisation** › **+** › **Wi-Fi** › ton réseau › **Se connecte** › **Exécuter immédiatement** (désactive *Me notifier*) › **Suivant** › *Recevoir*.",
+            "**D'un double tapotement au dos** : Réglages › Accessibilité › Toucher › **Toucher le dos** › Toucher deux fois › *Recevoir*.",
+            "**Depuis l'écran d'accueil** : appui long › **+** › Raccourcis › *Recevoir*.",
+            "iPhone 15 Pro et plus récents : le **bouton Action** peut lancer *Recevoir*."]),
+            el("p", { classe: "doux", texte: "En partage de connexion, l'iPhone n'est pas « connecté à un Wi-Fi » : utilise alors le toucher du dos ou le widget. Sans application de l'App Store, iOS ne permet pas une réception instantanée." })];
+        } },
+      { titre: "Ajouter un autre PC", sous: "code à 6 chiffres comparé sur les deux écrans", fait: pcs().length > 0,
+        corps: function () {
+          return [pas([
+            "Installe l'application sur l'autre PC (chapitre 1), sur le même Wi-Fi ou le même partage de connexion.",
+            "Sur l'un des deux : **Ajouter un PC** › **Attendre une demande ici**.",
+            "Sur l'autre : **Ajouter un PC**, tape l'adresse affichée par le premier, **Se connecter**.",
+            "Les deux écrans affichent un code à 6 chiffres : s'ils sont identiques, accepte des deux côtés.",
+            "L'iPhone relié à un seul PC peut quand même envoyer aux autres : ce PC relaie."]),
+            el("div", { classe: "boutons gauche" }, el("button", { classe: "bouton", texte: "Ajouter un PC", onclick: function () { fermer(); $("appairer-pc").click(); } }))];
+        } },
+      { titre: "Au quotidien", sous: "envoyer, recevoir, liens", fait: false,
+        corps: function () {
+          return [pas([
+            "**Du PC** : glisse des fichiers dans la fenêtre (ou clic droit › Envoyer vers › Universal Airdrop), coche un ou plusieurs appareils, **Envoyer**.",
+            "**Un lien ou un texte** : Ctrl+V dans la fenêtre, coche, Envoyer. Il arrive dans le **presse-papiers** de l'autre PC (Ctrl+V), avec une notification.",
+            "**De l'iPhone** : Partager › **Envoyer** › coche les appareils.",
+            "**Vers l'iPhone** : coche-le ; il le reçoit avec **Recevoir** (photos dans Photos, liens copiés).",
+            "**Téléphone d'un ami ou Android** : « Afficher le QR code » pour qu'il t'envoie, « Un téléphone, par QR code » pour lui envoyer.",
+            "Les fichiers reçus sont dans **Téléchargements › Universal Airdrop**."])];
+        } }
+    ];
+  }
+
+  function ouvrirGuide(n) {
+    var ch = chapitres();
+    if (n == null) {
+      var l = el("ol", { classe: "sommaire" });
+      ch.forEach(function (c, i) {
+        l.appendChild(el("li", null, el("button", { type: "button", onclick: function () { ouvrirGuide(i); } },
+          el("span", { classe: "num" + (c.fait ? " fait" : ""), texte: c.fait ? "✓" : String(i + 1) }),
+          el("span", null, el("span", { classe: "titre", texte: c.titre }), el("span", { classe: "sous", texte: c.sous })))));
+      });
+      ouvrir(el("div", null, el("h2", { texte: "Guide d'installation" }),
+        el("p", { classe: "doux", texte: "Dans l'ordre, une seule fois. Les étapes cochées sont déjà faites sur ce PC." }), l,
+        el("p", { classe: "doux petit" }, "Version texte complète : ", el("a", { href: GUIDE, target: "_blank", rel: "noopener", texte: "guide des Raccourcis sur GitHub" }))));
+      fenetre.classList.add("large");
+      return;
+    }
+    var c = ch[n], div = el("div", { classe: "chapitre" },
+      el("p", { classe: "fil", texte: "Étape " + (n + 1) + " sur " + ch.length }), el("h2", { texte: c.titre }));
+    c.corps().forEach(function (x) { div.appendChild(x); });
+    div.appendChild(el("div", { classe: "nav-guide" },
+      el("button", { classe: "lien-discret", texte: "← Sommaire", onclick: function () { ouvrirGuide(); } }),
+      el("span", { classe: "rangee" },
+        n > 0 ? el("button", { classe: "bouton secondaire", texte: "Précédent", onclick: function () { ouvrirGuide(n - 1); } }) : null,
+        n < ch.length - 1 ? el("button", { classe: "bouton", texte: "Suivant : " + ch[n + 1].titre, onclick: function () { ouvrirGuide(n + 1); } })
+                          : el("button", { classe: "bouton", texte: "Terminer", onclick: fermer }))));
+    ouvrir(div);
+    fenetre.classList.add("large");
+    fenetre.scrollTop = 0;
+  }
+  $("aide").addEventListener("click", function () { ouvrirGuide(); });
 
   // ---------- appairer un autre PC ----------
   $("appairer-pc").addEventListener("click", function () {
