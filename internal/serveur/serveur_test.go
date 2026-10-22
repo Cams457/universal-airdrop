@@ -513,3 +513,27 @@ func TestProfilIOSReutilisable(t *testing.T) {
 		}
 	}
 }
+
+// Adresse tapée sans https:// dans Safari : redirection vers https://, sans casser le HTTPS.
+func TestRedirectionHTTPVersHTTPS(t *testing.T) {
+	a := creer(t, "PC-A")
+	h := &http.Client{Transport: &http.Transport{Proxy: nil},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	r, err := h.Get(fmt.Sprintf("http://127.0.0.1:%d/iphone?x=1", a.Cfg.Port))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Body.Close()
+	if want := fmt.Sprintf("https://127.0.0.1:%d/iphone?x=1", a.Cfg.Port); r.StatusCode != 301 || r.Header.Get("Location") != want {
+		t.Fatalf("%d %q", r.StatusCode, r.Header.Get("Location"))
+	}
+	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/", a.Cfg.Port), nil)
+	req.Host = fmt.Sprintf("evil.example:%d", a.Cfg.Port)
+	if r, err := h.Do(req); err != nil || r.StatusCode != 400 {
+		t.Fatal("redirection ouverte vers un hôte étranger")
+	}
+	c := clientEpingle(t, a.ID.CAPEM)
+	if code, _ := faire(t, c, "GET", fmt.Sprintf("https://127.0.0.1:%d/api/v1/info", a.Cfg.Port), nil, nil); code != 200 {
+		t.Fatal("HTTPS cassé par le tri")
+	}
+}
