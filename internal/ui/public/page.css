@@ -1,0 +1,25 @@
+:root{--fond:#f5f4f0;--carte:#fff;--texte:#1d1c1a;--doux:#6b6862;--accent:#2f6fd6;--accent-texte:#fff;--bord:#e4e2dc}
+@media (prefers-color-scheme:dark){:root{--fond:#181715;--carte:#24231f;--texte:#eceae4;--doux:#a19d94;--accent:#5b93ee;--bord:#34322d}}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,system-ui,"Segoe UI",sans-serif;background:var(--fond);color:var(--texte);line-height:1.45}
+main{max-width:32rem;margin:0 auto;padding:1.5rem 1rem 3rem}
+h1{font-size:1.35rem;margin:.5rem 0 1rem}
+.bouton{display:block;width:100%;padding:1rem;margin:.75rem 0 .25rem;border-radius:14px;background:var(--carte);
+border:1px solid var(--bord);color:inherit;text-decoration:none;font:inherit;font-weight:600;text-align:center;word-break:break-all}
+.bouton.principal{background:var(--accent);color:var(--accent-texte);border-color:transparent}
+.bouton:disabled{opacity:.45}
+.detail{margin:0 0 .5rem .25rem;color:var(--doux);font-size:.875rem;word-break:break-all}
+.aide{color:var(--doux);font-size:.875rem;margin-top:1.5rem}
+.texte{white-space:pre-wrap;word-break:break-all;padding:1rem;border-radius:14px;background:var(--carte);
+border:1px solid var(--bord);font-size:.95rem;-webkit-user-select:all;user-select:all}
+.zone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.25rem;min-height:9rem;
+border:2px dashed var(--bord);border-radius:16px;background:var(--carte);cursor:pointer;text-align:center;padding:1rem}
+.zone input{position:absolute;width:1px;height:1px;opacity:0}
+.grand{font-weight:600;font-size:1.05rem}
+.etat{margin-top:1rem}
+.ligne{display:flex;justify-content:space-between;gap:.5rem;padding:.5rem 0;border-bottom:1px solid var(--bord);font-size:.9rem}
+.ligne span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.barre{height:8px;border-radius:4px;background:var(--bord);overflow:hidden;margin:.75rem 0}
+.barre div{height:100%;width:0;background:var(--accent);transition:width .2s}
+.ok{color:#2e8540}.erreur{color:#c4372c}
+.pied{margin-top:2.5rem;text-align:center;color:var(--doux);font-size:.75rem}

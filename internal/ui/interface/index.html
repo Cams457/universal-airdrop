@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Universal Airdrop</title>
+<link rel="icon" href="icone.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="entete">
+  <div class="marque"><img src="icone.png" alt="" width="32" height="32"><span>Universal Airdrop</span></div>
+  <div class="statut" id="statut" aria-live="polite">Connexion…</div>
+</header>
+
+<main id="app" hidden>
+  <section class="carte" id="carte-envoyer">
+    <h2>Envoyer</h2>
+    <label class="depot" id="depot">
+      <input type="file" id="choix" multiple>
+      <span class="grand">Glisse des fichiers ici</span>
+      <span class="doux">ou clique pour les choisir · photos, vidéos, PDF…</span>
+    </label>
+    <div id="selection" class="selection" hidden>
+      <div id="liste-selection"></div>
+      <p class="doux">Envoyer vers :</p>
+      <div id="cibles" class="cibles"></div>
+      <button class="lien-discret" id="annuler-selection">Annuler</button>
+    </div>
+    <div id="envois"></div>
+  </section>
+
+  <section class="carte">
+    <h2>Recevoir depuis un téléphone</h2>
+    <p class="doux">Le téléphone scanne un QR code et choisit ses photos. Marche avec tous les téléphones, iPhone ou Android, sur le même Wi-Fi ou en partage de connexion.</p>
+    <button class="bouton" id="recevoir-telephone">Afficher le QR code</button>
+  </section>
+
+  <section class="carte">
+    <h2>Appareils</h2>
+    <div id="appareils"></div>
+    <div class="actions">
+      <button class="bouton secondaire" id="ajouter-iphone">Ajouter un iPhone</button>
+      <button class="bouton secondaire" id="appairer-pc">Ajouter un PC</button>
+    </div>
+  </section>
+
+  <section class="carte">
+    <h2>Reçus récemment</h2>
+    <div id="evenements"><p class="doux">Rien pour l'instant.</p></div>
+    <button class="lien-discret" id="ouvrir-dossier">Ouvrir le dossier de réception</button>
+  </section>
+
+  <section class="carte">
+    <h2>Ce PC</h2>
+    <div id="infos"></div>
+    <details>
+      <summary>Réglages</summary>
+      <div class="reglages">
+        <label class="champ">Nom affiché sur les autres appareils
+          <span class="rangee"><input type="text" id="nom" maxlength="60"><button class="bouton petit" id="enregistrer-nom">Enregistrer</button></span>
+        </label>
+        <label class="interrupteur"><input type="checkbox" id="ouvrir-liens"> Ouvrir automatiquement les liens reçus</label>
+        <label class="interrupteur windows"><input type="checkbox" id="demarrage"> Lancer au démarrage de Windows</label>
+        <label class="interrupteur windows"><input type="checkbox" id="envoyer-vers"> Clic droit sur un fichier &gt; Envoyer vers &gt; Universal Airdrop</label>
+        <div class="windows rangee"><span id="etat-pare-feu"></span><button class="bouton petit" id="pare-feu">Autoriser dans le pare-feu</button></div>
+        <label class="champ">Lien iCloud du Raccourci iPhone (facultatif, pour le partager)
+          <span class="rangee"><input type="url" id="lien-raccourci" placeholder="https://www.icloud.com/shortcuts/…"><button class="bouton petit" id="enregistrer-raccourci">Enregistrer</button></span>
+        </label>
+        <button class="lien-discret danger" id="quitter">Quitter Universal Airdrop</button>
+      </div>
+    </details>
+  </section>
+</main>
+
+<div id="sans-secret" class="carte centre" hidden>
+  <h2>Ouvre l'application depuis son icône</h2>
+  <p>Pour des raisons de sécurité, cette page doit être ouverte depuis l'icône Universal Airdrop près de l'horloge (ou en relançant le programme).</p>
+</div>
+
+<dialog id="fenetre"><form method="dialog" class="fermer"><button aria-label="Fermer">×</button></form><div id="contenu-fenetre"></div></dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,147 +1,83 @@
-# universal-airdrop
+# Universal Airdrop
 
-Un « AirDrop » maison entre PC Windows et iPhone : PDF, photos, vidéos et liens, sur le réseau local,
-**chiffré, authentifié et rapide**. Il fonctionne via la box, en **partage de connexion** Wi-Fi, ou en
-**Bluetooth**, sans Internet.
+Envoie **photos, vidéos, PDF et liens** entre tes PC Windows et ton téléphone (iPhone ou Android),
+sans câble ni Internet : sur le même Wi-Fi, **en partage de connexion**, ou en Bluetooth.
+Tout est chiffré, et seuls tes appareils peuvent t'envoyer quelque chose.
 
-| Lien | Débit utile estimé | Usage |
-|---|---|---|
-| Wi-Fi (box ou partage de connexion) | 150 à 400 Mbit/s | tout, vidéos comprises |
-| Bluetooth (partage de connexion de l'iPhone, PAN) | 1 à 2 Mbit/s | liens, PDF, photos |
+<p align="center"><img src="assets/icone.png" width="96" alt=""></p>
 
-Le Bluetooth passe par le partage de connexion de l'iPhone, car iOS n'offre pas de transfert de
-fichiers Bluetooth vers un PC. Le protocole reste le même : HTTPS sur IP.
+## Installer (2 minutes)
 
-Sur l'iPhone : **Partager → PC de Camil**, et c'est envoyé.
+1. Télécharge **`UniversalAirdrop.exe`** depuis la [dernière version](https://github.com/Cams457/universal-airdrop/releases/latest).
+   (PC à processeur ARM, comme certains Surface : prends `UniversalAirdrop-arm64.exe`.)
+2. Double-clique dessus. Windows peut afficher *« Windows a protégé votre ordinateur »* : c'est normal pour
+   un programme non signé (une signature coûte plusieurs centaines d'euros par an). Clique sur
+   **Informations complémentaires**, puis **Exécuter quand même**.
+3. Suis l'assistant : le nom de ton PC, puis **Autoriser** (Windows demande « Oui »).
 
-| Sens | Comment |
+C'est tout. L'icône <img src="assets/icone.png" width="16" alt=""> reste près de l'horloge ; un clic
+dessus rouvre l'application.
+
+## Utiliser
+
+| Je veux… | Comment |
 |---|---|
-| iPhone → PC | Raccourci iOS « PC de Camil » dans la feuille de partage ([guide](docs/RACCOURCI_IOS.md)) |
-| PC → iPhone | `python -m transfert partager fichier.pdf` → QR code à scanner avec l'appareil photo |
-| PC → PC | `python -m transfert envoyer "PC fixe" video.mp4`, ou clic droit → Envoyer vers |
-| Liens | Safari → Partager → PC de Camil ; ou `python -m transfert lien "PC fixe" https://…` |
+| Envoyer depuis le PC | Glisse les fichiers dans la fenêtre, puis choisis l'appareil. Ou : clic droit sur un fichier > **Envoyer vers** > **Universal Airdrop** |
+| Envoyer vers un téléphone | Choisis « Un téléphone » : un QR code s'affiche, le téléphone le scanne et télécharge |
+| Envoyer depuis un téléphone | Sur le PC : **Afficher le QR code**. Le téléphone le scanne, choisit ses photos, touche **Envoyer**. Marche avec tous les téléphones |
+| Envoyer depuis le bouton Partager de l'iPhone | Ajoute ton iPhone une fois (**Ajouter un iPhone**, 5 minutes) : ensuite, dans n'importe quelle app, Partager → **Envoyer au PC** |
+| Envoyer entre deux PC | Installe l'application sur les deux, puis **Ajouter un PC** et compare le code à 6 chiffres |
 
-## Installation (invite cmd, sur chaque PC)
+Les fichiers reçus arrivent dans **Téléchargements\Universal Airdrop** ; les liens s'ouvrent dans le navigateur.
 
-```bat
-git clone https://github.com/Cams457/universal-airdrop
-cd universal-airdrop
-python -m pip install -r requirements.txt
-python verif_env.py
-python -m transfert nommer "PC de Camil"
-python -m transfert pare-feu
-```
+## Sans box : partage de connexion
 
-`pare-feu` affiche les deux règles à ajouter. Relis-les, puis exécute `pare_feu.cmd` dans une invite cmd
-**ouverte en administrateur**.
+Aucune box ni Internet n'est nécessaire : l'application détecte toute seule le nouveau réseau, en une dizaine de secondes.
 
-Ensuite, laisse tourner le démon :
+- **L'iPhone partage sa connexion** : Réglages > Partage de connexion > Autoriser d'autres utilisateurs.
+  Le PC se connecte au Wi-Fi de l'iPhone. Pour plus de vitesse, désactive *Maximiser la compatibilité* (5 GHz).
+- **Un Android partage sa connexion** : Paramètres > Point d'accès ; le PC s'y connecte.
+- **Le PC partage sa connexion** : Paramètres Windows > Réseau et Internet > Point d'accès sans fil mobile ;
+  le téléphone s'y connecte.
+- **En Bluetooth** : avec l'iPhone en partage de connexion, Paramètres Windows > Bluetooth et appareils >
+  (l'iPhone) > Réseau personnel (PAN) > Se connecter. C'est lent (1 à 2 Mbit/s) : idéal pour des liens,
+  des PDF ou des photos, pas pour des vidéos.
 
-```bat
-python -m transfert demon
-```
+Un réseau d'école ou de café bloque souvent les échanges entre appareils : passe alors par un partage de connexion.
 
-## Premières étapes
+## Sécurité, en bref
 
-**Ajouter l'iPhone** (dans une seconde fenêtre cmd, démon lancé) :
+- Tous les échanges sont chiffrés (TLS). Chaque PC a son propre certificat, que tes autres appareils mémorisent.
+- Un appareil inconnu ne peut rien envoyer : il faut l'ajouter, et entre deux PC, comparer un code à 6 chiffres.
+- Rien n'est ouvert à Internet : seules les adresses du réseau local sont acceptées.
+- Détails : [docs/SECURITE.md](docs/SECURITE.md).
 
-```bat
-python -m transfert iphone-ajouter "iPhone de Camil"
-```
+## Questions fréquentes
 
-Puis suis [docs/RACCOURCI_IOS.md](docs/RACCOURCI_IOS.md).
+**Le téléphone affiche un avertissement de sécurité.** C'est normal la première fois : le PC utilise son
+propre certificat, qu'aucune autorité publique n'a signé. Sur iPhone, **Ajouter un iPhone** installe ce
+certificat et l'avertissement disparaît. Sur Android, choisis « Paramètres avancés », puis « Continuer ».
 
-**Appairer deux PC** :
-- sur le PC B : `python -m transfert appairage-ouvrir` ;
-- sur le PC A : `python -m transfert appairer <IP de B>`.
+**Est-ce que ça passe par Internet ?** Non. Les fichiers vont directement d'un appareil à l'autre.
 
-Les deux écrans affichent un code à 6 chiffres. On valide seulement s'ils sont identiques.
+**L'autre PC est « hors ligne ».** Vérifie qu'il est allumé, sur le même réseau, et que l'application y tourne.
 
-**Clic droit « Envoyer vers »** et lancement au démarrage :
+**Mac ou Linux ?** L'application fonctionne aussi (sans icône près de l'horloge), à compiler depuis les
+sources : voir [docs/DEVELOPPEMENT.md](docs/DEVELOPPEMENT.md).
 
-```bat
-python -m transfert installer-windows --demarrage
-```
+**Désinstaller.**
+1. Dans **Réglages**, décoche « Lancer au démarrage » et « Envoyer vers », puis **Quitter**.
+2. Supprime `UniversalAirdrop.exe` et le dossier `%APPDATA%\UniversalAirdrop`.
+3. La règle de pare-feu « Universal Airdrop » se retire dans Pare-feu Windows Defender > Paramètres avancés.
 
-## Commandes
+## Pour aller plus loin
 
-| Commande | Rôle |
+| Document | Contenu |
 |---|---|
-| `demon` | serveur HTTPS (à laisser tourner) |
-| `nommer "PC de Camil"` | nom affiché, et nom réseau `pc-de-camil.local` |
-| `adresses` | IP du PC par réseau : box, partage iPhone, point d'accès mobile |
-| `empreinte` | empreinte de la CA du PC (à comparer sur l'iPhone) |
-| `appairage-ouvrir` / `appairer HOTE` | appairage PC ↔ PC par code |
-| `envoyer CIBLE FICHIERS…` | envoi PC → PC par blocs, avec reprise |
-| `lien CIBLE URL` | ouvre un lien sur l'autre PC |
-| `partager CHEMIN\|URL…` | PC → iPhone par QR code (10 min, usage unique) |
-| `iphone-ajouter NOM` / `revoquer NOM` | gestion des appareils |
-| `appareils` | liste des appareils de confiance |
-| `pare-feu` | commandes netsh à relire |
-| `installer-windows` / `desinstaller-windows` | clic droit « Envoyer vers » et démarrage automatique |
+| [docs/RACCOURCI_IOS.md](docs/RACCOURCI_IOS.md) | Le Raccourci iPhone « Envoyer au PC », et comment le partager à d'autres |
+| [docs/VITESSE.md](docs/VITESSE.md) | Débits mesurés et ce qui limite la vitesse |
+| [docs/LANGAGE.md](docs/LANGAGE.md) | Pourquoi Go |
+| [docs/DEVELOPPEMENT.md](docs/DEVELOPPEMENT.md) | Compiler, tester, architecture, protocole |
 
-## Vitesse
-
-Le logiciel n'est plus la limite. Avec `python bench.py --local`, sur une machine de test à
-2 cœurs, en deux processus séparés :
-
-| Cas | Débit |
-|---|---|
-| 40 photos de 3 Mo | environ 2 000 Mbit/s |
-| Gros fichier | 2 300 à 2 900 Mbit/s |
-| Démarrage | moins de 70 ms |
-
-C'est la radio qui fixe le plafond. Le Wi-Fi 6 en 2×2 et 80 MHz donne environ 1 200 Mbit/s de débit
-physique, soit 600 à 800 Mbit/s utiles en un seul saut. Le détail, la dérivation et le matériel
-nécessaire sont dans [docs/VITESSE.md](docs/VITESSE.md).
-
-Sur le vrai réseau, mesure d'abord le débit brut avec iperf3, puis :
-
-```bat
-python bench.py --cible "PC fixe" --iperf <débit iperf3 en Mbit/s>
-```
-
-La cible est η = débit utile / débit iperf3 ≥ 0,8.
-
-## Sécurité
-
-Voir [docs/SECURITE.md](docs/SECURITE.md) :
-- modèle de menace ;
-- protocole d'appairage avec engagement ;
-- limites connues.
-
-## Structure
-
-```
-transfert/
-  serveur.py     démon HTTPS : transferts, API iPhone, partages, appairage, contrôle local
-  client.py      appairage (côté initiateur) et envoi par blocs parallèles
-  blocs.py       découpage, SHA-256 par bloc, reprise après coupure
-  identite.py    CA locale + certificat serveur (réémis quand l'IP change)
-  securite.py    noms sûrs, IP autorisées, URL, jetons, engagement, code de vérification
-  appareils.py   registre des appareils de confiance (rechargé à chaud)
-  mdns.py        annonce Bonjour « pc-de-camil.local »
-  decouverte.py  découverte des PC par multicast, sur chaque interface
-  partage.py     liens de partage à usage unique (QR code)
-  profil_ios.py  profil .mobileconfig pour l'iPhone
-  windows.py     « Envoyer vers » et démarrage automatique
-v0/              V0 : envoi TCP minimal en clair (étape d'apprentissage)
-tests/           pytest : 39 tests, dont deux démons réels en HTTPS
-```
-
-Tests : `python -m pip install pytest` puis `python -m pytest`.
-
-## Avancement (feuille de route)
-
-| Phase | État |
-|---|---|
-| Phase 0 — Préparation | `verif_env.py` prêt ; à lancer sur chaque PC |
-| V0 — PC → PC en TCP | fait et testé |
-| V1 — iPhone → PC (Raccourci) | API faite et testée ; Raccourci à construire, test vidéo > 500 Mo à faire |
-| V2 — Blocs, reprise, vitesse | fait et testé ; mesures réelles à faire |
-| V3 — PC → iPhone (QR code) | fait et testé ; scan réel à faire |
-| V4 — Compatibilité LocalSend | non commencé : dépend de la décision de la V1 |
-| V5 — Sécurité | fait et testé dès la V1 (HTTPS, épinglage, jetons, code avec engagement) |
-| V6 — Intégration Windows | « Envoyer vers » et démarrage faits ; icône de notification à faire |
-| Partage de connexion | fait (multi-interfaces, certificat réémis à chaud, Bonjour) ; à tester sur le terrain |
-| Bluetooth | fait (via le PAN du partage de l'iPhone, interface reconnue, avertissement de débit) ; à tester |
+La première version, écrite en Python, est conservée sur la branche
+[`python-v0.1`](https://github.com/Cams457/universal-airdrop/tree/python-v0.1).

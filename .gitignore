@@ -1,7 +1,9 @@
-__pycache__/
-*.pyc
-.pytest_cache/
-.venv/
+# Exécutables compilés
+*.exe
+dist/
+# Fichiers temporaires de réception et de mesure
 *.part
 bench_*.bin
-qr.png
+# Éditeurs
+.vscode/
+.idea/
