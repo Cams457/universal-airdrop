@@ -211,10 +211,11 @@ func (s *Service) Demarrer() error {
 	ctx, annuler := context.WithCancel(context.Background())
 	s.annuler = annuler
 
-	l, err := s.ecouteur()
+	brut, err := s.ecouteur()
 	if err != nil {
 		return fmt.Errorf("port %d déjà utilisé ? %w", s.Cfg.Port, err)
 	}
+	l := nouveauTri(brut, func() []string { return []string{s.Cfg.NomMdns() + ".local", "localhost"} })
 	s.public = &http.Server{
 		Handler:           s.routesPubliques(),
 		TLSConfig:         s.ID.ConfigServeur(),
