@@ -14,6 +14,7 @@ import hashlib
 import math
 import os
 import threading
+import time
 from pathlib import Path
 
 from .config import ecrire_json, lire_json
@@ -44,7 +45,16 @@ def racine(hachages: list[str]) -> str:
 
 
 class Reception:
-    """État d'une réception en cours, persistant sur disque pour survivre à une coupure."""
+    """État d'une réception en cours, persistant sur disque pour survivre à une coupure.
+
+    Vitesse : le fichier .part reste ouvert pendant toute la réception, et l'état n'est sauvegardé
+    qu'au plus toutes les PERIODE_ETAT_S secondes (et jamais pour un fichier d'un seul bloc).
+    Sûreté : un état sauvegardé peut mentionner un bloc dont l'écriture n'avait pas encore atteint
+    le disque (coupure de courant). À la reprise, chaque bloc noté est donc relu et revérifié ;
+    un bloc invalide est simplement redemandé. On évite ainsi un fsync coûteux à chaque bloc.
+    """
+
+    PERIODE_ETAT_S = 0.5
 
     def __init__(self, dossier_tmp: Path, ident: str, meta: dict):
         self.dossier_tmp = dossier_tmp
@@ -53,6 +63,8 @@ class Reception:
         self.chemin_part = dossier_tmp / f"{ident}.part"
         self.chemin_etat = dossier_tmp / f"{ident}.json"
         self._verrou = threading.Lock()
+        self._f = None
+        self._derniere_sauvegarde = time.monotonic()
 
     @classmethod
     def ouvrir(cls, dossier_tmp: Path, ident: str, nom: str, taille: int, taille_bloc: int,
@@ -67,15 +79,42 @@ class Reception:
                     "n": nombre_blocs(taille, taille_bloc), "recus": {}}
             with open(part, "wb") as f:
                 f.truncate(taille)       # réserve la taille (fichier creux sur NTFS et ext4)
-            ecrire_json(dossier_tmp / f"{ident}.json", etat)
-        return cls(dossier_tmp, ident, etat)
+        rec = cls(dossier_tmp, ident, etat)
+        if compatible:
+            rec._reverifier()
+        return rec
+
+    def _reverifier(self) -> None:
+        """Reprise : ne garde que les blocs dont le contenu sur disque correspond à l'empreinte notée."""
+        b, taille, valides = self.meta["taille_bloc"], self.meta["taille"], {}
+        with open(self.chemin_part, "rb") as f:
+            for cle, sha in self.meta["recus"].items():
+                i = int(cle)
+                f.seek(i * b)
+                if hashlib.sha256(f.read(longueur_bloc(i, taille, b))).hexdigest() == sha:
+                    valides[cle] = sha
+        self.meta["recus"] = valides
+
+    def _fichier(self):
+        if self._f is None:
+            self._f = open(self.chemin_part, "r+b")
+        return self._f
+
+    def _sauver_etat(self, force: bool = False) -> None:
+        maintenant = time.monotonic()
+        if force or maintenant - self._derniere_sauvegarde >= self.PERIODE_ETAT_S:
+            ecrire_json(self.chemin_etat, self.meta)
+            self._derniere_sauvegarde = maintenant
 
     def manquants(self) -> list[int]:
         recus = self.meta["recus"]
         return [i for i in range(self.meta["n"]) if str(i) not in recus]
 
     def ecrire_bloc(self, i: int, donnees: bytes, sha_annonce: str) -> str | None:
-        """Vérifie puis écrit le bloc i. Renvoie None si tout va bien, sinon la raison du refus."""
+        """Vérifie puis écrit le bloc i. Renvoie None si tout va bien, sinon la raison du refus.
+
+        Le hachage se fait hors verrou : plusieurs blocs se vérifient en parallèle (hashlib libère le GIL).
+        """
         n, taille, b = self.meta["n"], self.meta["taille"], self.meta["taille_bloc"]
         if not 0 <= i < n:
             return "indice de bloc hors limites"
@@ -85,12 +124,25 @@ class Reception:
         if sha != sha_annonce.lower():
             return "empreinte du bloc incorrecte"
         with self._verrou:
-            with open(self.chemin_part, "r+b") as f:
-                f.seek(i * b)
-                f.write(donnees)
+            f = self._fichier()
+            f.seek(i * b)
+            f.write(donnees)
             self.meta["recus"][str(i)] = sha
-            ecrire_json(self.chemin_etat, self.meta)
+            if n > 1:
+                self._sauver_etat()
         return None
+
+    def sauvegarder(self) -> None:
+        """Appelé à l'arrêt du démon : l'état le plus récent part sur disque."""
+        with self._verrou:
+            if self._f:
+                self._f.flush()
+            self._sauver_etat(force=True)
+
+    def _fermer(self) -> None:
+        if self._f is not None:
+            self._f.close()
+            self._f = None
 
     def finaliser(self, dossier_reception: Path, racine_emetteur: str) -> tuple[Path | None, str]:
         if self.manquants():
@@ -99,11 +151,14 @@ class Reception:
         if racine([recus[str(i)] for i in range(self.meta["n"])]) != racine_emetteur.lower():
             return None, "empreinte racine différente"
         with self._verrou:
+            self._fermer()
             final = chemin_libre(dossier_reception, self.meta["nom"])
             os.replace(self.chemin_part, final)
             self.chemin_etat.unlink(missing_ok=True)
         return final, "ok"
 
     def abandonner(self) -> None:
-        self.chemin_part.unlink(missing_ok=True)
-        self.chemin_etat.unlink(missing_ok=True)
+        with self._verrou:
+            self._fermer()
+            self.chemin_part.unlink(missing_ok=True)
+            self.chemin_etat.unlink(missing_ok=True)

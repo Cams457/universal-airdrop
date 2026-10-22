@@ -12,7 +12,7 @@ DECALAGE_CONTROLE = 1          # API de contrôle locale sur 127.0.0.1:(port + 1
 GROUPE_MULTICAST = "239.255.47.80"
 PORT_MULTICAST = 47801
 TAILLE_BLOC = 4 * 1024 * 1024  # 4 Mio : voir la section V2 de la feuille de route
-CONNEXIONS_PARALLELES = 3
+CONNEXIONS_PARALLELES = 4
 DUREE_PARTAGE_S = 600          # lien QR valable 10 min
 DUREE_APPAIRAGE_S = 120
 

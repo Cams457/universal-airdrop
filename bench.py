@@ -56,40 +56,63 @@ def _afficher(resultats, iperf):
 
 
 async def _local(mo: int, essais):
+    """A (émetteur) dans ce processus, B (récepteur) dans un AUTRE processus : chaque bout a son propre
+    cœur, comme deux vrais PC. Sinon émetteur et récepteur se partageraient un seul GIL Python."""
+    import subprocess
+    import time
+    from transfert.config import ecrire_json
     from transfert.serveur import Service
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        services = []
-        for nom in ("BENCH-A", "BENCH-B"):
-            cfg = charger_config(tmp / nom)
-            cfg.nom, cfg.port, cfg.reception, cfg.decouverte, cfg.ouvrir_liens = \
-                nom, _port(), str(tmp / f"{nom}-recus"), False, False
-            cfg.mdns = False
-            services.append(Service(cfg, verbeux=False))
-        A, B = services
-        await A.demarrer()
-        await B.demarrer()
+        port_b = _port()
+        ecrire_json(tmp / "B" / "config.json", {
+            "nom": "BENCH-B", "port": port_b, "reception": str(tmp / "B-recus"),
+            "decouverte": False, "mdns": False, "ouvrir_liens": False})
+        proc = subprocess.Popen([sys.executable, "-m", "transfert", "--donnees", str(tmp / "B"), "demon"],
+                                cwd=Path(__file__).resolve().parent,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        cfg_a = charger_config(tmp / "A")
+        cfg_a.nom, cfg_a.port, cfg_a.reception, cfg_a.decouverte, cfg_a.mdns, cfg_a.ouvrir_liens = \
+            "BENCH-A", _port(), str(tmp / "A-recus"), False, False, False
+        A = Service(cfg_a, verbeux=False)
+        cfg_b = charger_config(tmp / "B")
         try:
-            await asyncio.to_thread(appeler, B.cfg, "POST", "/controle/appairage/ouvrir")
+            for _ in range(100):
+                if (tmp / "B" / "controle.json").exists():
+                    break
+                time.sleep(0.1)
+            await A.demarrer()
+            await asyncio.to_thread(appeler, cfg_b, "POST", "/controle/appairage/ouvrir")
 
             async def ok(code, *_):
-                e = await asyncio.to_thread(appeler, B.cfg, "GET", "/controle/appairage")
-                await asyncio.to_thread(appeler, B.cfg, "POST", "/controle/appairage/decision", {"accepter": True})
+                e = await asyncio.to_thread(appeler, cfg_b, "GET", "/controle/appairage")
+                await asyncio.to_thread(appeler, cfg_b, "POST", "/controle/appairage/decision", {"accepter": True})
                 return e["code"] == code
 
-            await appairer(A.cfg, A.identite, A.appareils, "127.0.0.1", B.cfg.port, ok)
+            await appairer(A.cfg, A.identite, A.appareils, "127.0.0.1", port_b, ok)
             src = _fichier(tmp, mo)
+            photos = []
+            for i in range(40):
+                p = tmp / f"photo_{i:02d}.heic"
+                p.write_bytes(os.urandom(3 * 1024 * 1024))
+                photos.append(p)
             resultats = []
             for bloc, par in essais:
                 A.cfg.paralleles = par
-                for f in B.cfg.dossier_reception.glob("bench_*"):
-                    f.unlink()
                 (b,) = await envoyer(A.cfg, A.identite, A.appareils, "BENCH-B", [src], taille_bloc=bloc)
                 resultats.append(((bloc, par), b))
+            # 40 photos de 3 Mo : mesure le coût par fichier
+            A.cfg.paralleles = essais[-1][1]
+            t0 = time.perf_counter()
+            bilans = await envoyer(A.cfg, A.identite, A.appareils, "BENCH-B", photos, taille_bloc=essais[-1][0])
+            duree = time.perf_counter() - t0
+            total = sum(b.taille for b in bilans)
+            print(f"\n40 photos de 3 Mo : {total / 1e6:.0f} Mo en {duree:.2f} s, soit {8 * total / duree / 1e6:.0f} Mbit/s")
             return resultats
         finally:
             await A.arreter()
-            await B.arreter()
+            proc.terminate()
+            proc.wait(10)
 
 
 async def _distant(cible: str, mo: int, essais):
@@ -116,7 +139,7 @@ def main():
     p.add_argument("--mo", type=int, default=200, help="taille du fichier de test en Mo")
     p.add_argument("--iperf", type=float, help="débit TCP brut iperf3 sur le même lien, en Mbit/s")
     a = p.parse_args()
-    essais = [(1 << 20, 1), (4 << 20, 1), (4 << 20, 3), (8 << 20, 3)]
+    essais = [(1 << 20, 1), (4 << 20, 1), (4 << 20, 4), (8 << 20, 4)]
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
     res = asyncio.run(_local(a.mo, essais) if a.local else _distant(a.cible, a.mo, essais))

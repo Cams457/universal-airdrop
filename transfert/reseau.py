@@ -57,6 +57,48 @@ def ips_locales(avec_boucle: bool = True) -> set[str]:
     return ips
 
 
+DEBIT_PAR_DEFAUT = {"ethernet": 1000, "wifi": 300, "bluetooth": 2, "autre": 100}
+
+
+def lien(nom_interface: str) -> str:
+    n = (nom_interface or "").lower()
+    if "bluetooth" in n:
+        return "bluetooth"
+    if any(m in n for m in ("wi-fi", "wifi", "wlan", "wireless", "sans fil", "local* ")):
+        return "wifi"                     # « Connexion au réseau local* N » = point d'accès hébergé
+    if any(m in n for m in ("ethernet", "eth", "enp", "eno", "lan")):
+        return "ethernet"
+    return "autre"
+
+
+def debit_interface(nom_interface: str) -> int:
+    """Débit négocié par la carte, en Mbit/s (Ethernet 1000, Wi-Fi 6 jusqu'à 2400…).
+
+    C'est un débit PHYSIQUE : le débit TCP utile en Wi-Fi n'en vaut qu'environ 50 à 70 %.
+    Il sert seulement à classer les chemins entre eux. 0 ou inconnu -> valeur par défaut du type de lien.
+    """
+    try:
+        import psutil
+        stats = psutil.net_if_stats().get(nom_interface)
+        if stats and stats.speed > 0:
+            return int(stats.speed)
+    except ImportError:
+        pass
+    return DEBIT_PAR_DEFAUT[lien(nom_interface)]
+
+
+def interface_de(ip_locale: str | None) -> str:
+    return next((nom for ip, nom in interfaces() if ip == ip_locale), "")
+
+
+def capacite_vers(ip_distante: str, lien_distant: str = "autre", debit_distant: int = 0) -> int:
+    """Capacité estimée d'un chemin = le plus lent des deux bouts (le maillon faible fixe le débit)."""
+    local = interface_de(ip_locale_vers(ip_distante))
+    d_local = debit_interface(local) if local else DEBIT_PAR_DEFAUT["autre"]
+    d_distant = debit_distant or DEBIT_PAR_DEFAUT.get(lien_distant, 100)
+    return min(d_local, d_distant)
+
+
 def est_bluetooth(nom_interface: str) -> bool:
     return "bluetooth" in (nom_interface or "").lower()
 

@@ -282,8 +282,10 @@ class Service:
         if shutil.disk_usage(self.cfg.dossier_reception).free < taille:
             return erreur(507, "espace disque insuffisant")
         ident = hashlib.sha256(f"{app['cle']}|{cle}|{taille}|{taille_bloc}".encode()).hexdigest()[:32]
-        rec = await asyncio.to_thread(Reception.ouvrir, self.tmp, ident, nom, taille, taille_bloc, app["cle"])
-        self.receptions[ident] = rec
+        rec = self.receptions.get(ident)     # l'état en mémoire fait foi ; le disque sert après un redémarrage
+        if rec is None:
+            rec = await asyncio.to_thread(Reception.ouvrir, self.tmp, ident, nom, taille, taille_bloc, app["cle"])
+            self.receptions[ident] = rec
         return web.json_response({"id": ident, "manquants": rec.manquants()})
 
     def _reception(self, request, app) -> Reception:
@@ -550,6 +552,8 @@ class Service:
             self.journal(f"   https://{ip}:{self.cfg.port}   ({t})")
 
     async def arreter(self) -> None:
+        for rec in list(self.receptions.values()):
+            await asyncio.to_thread(rec.sauvegarder)     # la reprise repartira de là
         for t in self._taches:
             t.cancel()
         if self.decouverte:

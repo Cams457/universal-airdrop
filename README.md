@@ -82,9 +82,18 @@ python -m transfert installer-windows --demarrage
 
 ## Vitesse
 
-`python bench.py --local` mesure le plafond du logiciel seul. Sur une machine de test à 2 cœurs :
-environ 2 000 Mbit/s en boucle locale, et une latence de démarrage de 12 à 180 ms. Le Wi-Fi
-(150 à 600 Mbit/s) reste donc le facteur limitant.
+Le logiciel n'est plus la limite. Avec `python bench.py --local`, sur une machine de test à
+2 cœurs, en deux processus séparés :
+
+| Cas | Débit |
+|---|---|
+| 40 photos de 3 Mo | environ 2 000 Mbit/s |
+| Gros fichier | 2 300 à 2 900 Mbit/s |
+| Démarrage | moins de 70 ms |
+
+C'est la radio qui fixe le plafond. Le Wi-Fi 6 en 2×2 et 80 MHz donne environ 1 200 Mbit/s de débit
+physique, soit 600 à 800 Mbit/s utiles en un seul saut. Le détail, la dérivation et le matériel
+nécessaire sont dans [docs/VITESSE.md](docs/VITESSE.md).
 
 Sur le vrai réseau, mesure d'abord le débit brut avec iperf3, puis :
 
@@ -117,7 +126,7 @@ transfert/
   profil_ios.py  profil .mobileconfig pour l'iPhone
   windows.py     « Envoyer vers » et démarrage automatique
 v0/              V0 : envoi TCP minimal en clair (étape d'apprentissage)
-tests/           pytest : 34 tests, dont deux démons réels en HTTPS
+tests/           pytest : 39 tests, dont deux démons réels en HTTPS
 ```
 
 Tests : `python -m pip install pytest` puis `python -m pytest`.

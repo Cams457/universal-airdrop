@@ -23,6 +23,7 @@ from .identite import (Identite, contexte_client_epingle, contexte_client_premie
                        empreinte_lisible, empreinte_pem)
 
 ESSAIS = 4
+FICHIERS_EN_VOL = 4
 
 
 class ErreurTransfert(Exception):
@@ -86,13 +87,31 @@ async def appairer(cfg: Config, identite: Identite, appareils: Appareils, hote: 
 
 # --- résolution de l'adresse d'un pair -----------------------------------------
 
-def _candidats(cfg: Config, fp: str, info: dict) -> list[tuple[str, int]]:
-    """Adresses à essayer : d'abord celle vue récemment par la découverte, puis la dernière connue."""
+def classer_chemins(adresses: dict[str, dict], capacite=None) -> list[tuple[str, int]]:
+    """Trie les adresses d'un pair du chemin le plus rapide au plus lent.
+
+    Capacité d'un chemin = min(débit de notre interface de sortie, débit annoncé par le pair) :
+    Ethernet passe avant le Wi-Fi, qui passe avant le Bluetooth.
+    """
+    from .reseau import capacite_vers
+    capacite = capacite or capacite_vers
+    notes = [(capacite(ip, v.get("lien", "autre"), v.get("mbits", 0)), ip, v["port"]) for ip, v in adresses.items()]
+    notes.sort(key=lambda x: -x[0])
+    return [(ip, port) for _, ip, port in notes]
+
+
+async def _candidats(cfg: Config, fp: str, info: dict) -> list[tuple[str, int]]:
+    """Adresses à essayer : celles vues par la découverte, du chemin le plus rapide au plus lent,
+    puis la dernière adresse connue.
+
+    L'appel au démon local passe par un thread : un appel bloquant dans la boucle d'événements
+    la figerait (et, si le démon tourne dans le même processus, jusqu'au délai maximal).
+    """
     candidats = []
     try:
-        vu = appeler(cfg, "GET", "/controle/vus", timeout=1).get(fp)
+        vu = (await asyncio.to_thread(appeler, cfg, "GET", "/controle/vus", None, 0.5)).get(fp)
         if vu:
-            candidats.append((vu["ip"], vu["port"]))
+            candidats = await asyncio.to_thread(classer_chemins, vu["adresses"])
     except (DemonAbsent, RuntimeError):
         pass
     if (info["adresse"], info["port"]) not in candidats:
@@ -147,7 +166,10 @@ class Progres:
 
 
 async def envoyer_fichier(s: aiohttp.ClientSession, base: str, jeton: str, chemin: Path,
-                          paralleles: int, taille_bloc: int = TAILLE_BLOC, rappel=None) -> Bilan:
+                          paralleles: int, taille_bloc: int = TAILLE_BLOC, rappel=None,
+                          en_vol: asyncio.Semaphore | None = None, sur_octets=None) -> Bilan:
+    """en_vol borne le nombre de blocs envoyés en même temps, tous fichiers confondus."""
+    en_vol = en_vol or asyncio.Semaphore(paralleles)
     t0 = time.perf_counter()
     st = chemin.stat()
     cle = hashlib.sha256(f"{chemin.resolve()}|{st.st_size}|{st.st_mtime_ns}".encode()).hexdigest()
@@ -176,10 +198,11 @@ async def envoyer_fichier(s: aiohttp.ClientSession, base: str, jeton: str, chemi
             if i in manquants:
                 for essai in range(ESSAIS):
                     try:
-                        async with s.put(f"{base}/api/v1/transfert/{ident}/bloc/{i}", data=donnees,
-                                         headers={**auth, "X-Bloc-SHA256": h,
-                                                  "Content-Type": "application/octet-stream"}) as r:
-                            await _verifier(r)
+                        async with en_vol:
+                            async with s.put(f"{base}/api/v1/transfert/{ident}/bloc/{i}", data=donnees,
+                                             headers={**auth, "X-Bloc-SHA256": h,
+                                                      "Content-Type": "application/octet-stream"}) as r:
+                                await _verifier(r)
                         break
                     except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                         if essai == ESSAIS - 1:
@@ -188,6 +211,8 @@ async def envoyer_fichier(s: aiohttp.ClientSession, base: str, jeton: str, chemi
                 if premier[0] is None:
                     premier[0] = time.perf_counter() - t0
             progres.fait += len(donnees)
+            if sur_octets:
+                sur_octets(len(donnees))
             if rappel:
                 rappel(chemin.name, progres)
 
@@ -206,17 +231,32 @@ async def envoyer(cfg: Config, identite: Identite, appareils: Appareils, cible: 
     """avant_envoi(ip_du_pair) -> bool : permet d'annuler, par exemple si le lien est le Bluetooth."""
     fp, info = resoudre(appareils, cible)
     ctx = contexte_client_epingle(info["ca_pem"])
-    connecteur = aiohttp.TCPConnector(ssl=ctx, limit=max(cfg.paralleles, 1) + 1)
+    connecteur = aiohttp.TCPConnector(ssl=ctx, limit=max(cfg.paralleles, FICHIERS_EN_VOL) * 2)
     timeout = aiohttp.ClientTimeout(total=None, sock_connect=5, sock_read=120)
     async with aiohttp.ClientSession(connector=connecteur, timeout=timeout) as s:
-        base = await _joindre(s, _candidats(cfg, fp, info), ctx)
+        base = await _joindre(s, await _candidats(cfg, fp, info), ctx)
         if avant_envoi and not avant_envoi(base.split("//")[1].rsplit(":", 1)[0]):
             raise ErreurTransfert("envoi annulé")
-        bilans = []
-        for chemin in chemins:
-            bilans.append(await envoyer_fichier(s, base, info["jeton_sortant"], Path(chemin),
-                                                cfg.paralleles, taille_bloc, rappel))
-    return bilans
+        chemins = [Path(c) for c in chemins]
+        global_ = Progres(total=sum(c.stat().st_size for c in chemins))
+        etiquette = chemins[0].name if len(chemins) == 1 else f"{len(chemins)} fichiers"
+
+        def sur_octets(n):
+            global_.fait += n
+            if rappel:
+                rappel(etiquette, global_)
+
+        # Plusieurs fichiers en vol : les allers-retours preparer/terminer d'un fichier se
+        # recouvrent avec l'envoi des autres. en_vol borne le total de blocs simultanés.
+        en_vol = asyncio.Semaphore(max(1, cfg.paralleles))
+        fichiers = asyncio.Semaphore(FICHIERS_EN_VOL)
+
+        async def un(chemin):
+            async with fichiers:
+                return await envoyer_fichier(s, base, info["jeton_sortant"], chemin, cfg.paralleles,
+                                             taille_bloc, None, en_vol, sur_octets)
+
+        return list(await asyncio.gather(*(un(c) for c in chemins)))
 
 
 async def envoyer_lien(cfg: Config, appareils: Appareils, cible: str, url: str) -> dict:
@@ -225,7 +265,7 @@ async def envoyer_lien(cfg: Config, appareils: Appareils, cible: str, url: str) 
     fp, info = resoudre(appareils, cible)
     ctx = contexte_client_epingle(info["ca_pem"])
     async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=ctx)) as s:
-        base = await _joindre(s, _candidats(cfg, fp, info), ctx)
+        base = await _joindre(s, await _candidats(cfg, fp, info), ctx)
         async with s.post(f"{base}/api/rapide/lien", json={"url": url},
                           headers={"Authorization": f"Bearer {info['jeton_sortant']}"}) as r:
             await _verifier(r)
