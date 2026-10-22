@@ -1,0 +1,7 @@
+aiohttp>=3.9
+cryptography>=42
+qrcode[pil]>=7.4
+zeroconf>=0.130
+psutil>=5.9
+# conversions optionnelles (désactivées par défaut) : pillow-heif, et ffmpeg installé à part
+# tests : pytest
