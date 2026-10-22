@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -519,13 +520,35 @@ func (s *Service) prendreSelection(id string) (selection, bool) {
 	return sel, ok
 }
 
+// cibles : la liste des destinataires d'une requête (« cibles », ou « cible » pour l'ancien format),
+// sans doublon ni nom vide.
+func cibles(liste []string, une string) []string {
+	vus := map[string]bool{}
+	var l []string
+	for _, c := range append(liste, une) {
+		c = strings.TrimSpace(c)
+		if c != "" && !vus[strings.ToLower(c)] {
+			vus[strings.ToLower(c)] = true
+			l = append(l, c)
+		}
+	}
+	return l
+}
+
+// cEnvoyer envoie une sélection de fichiers à un ou plusieurs PC, en parallèle.
 func (s *Service) cEnvoyer(w http.ResponseWriter, r *http.Request) {
 	var c struct {
 		Cible     string   `json:"cible"`
+		Cibles    []string `json:"cibles"`
 		Selection string   `json:"selection"`
 		Chemins   []string `json:"chemins"`
 	}
 	if !lireJSON(w, r, &c) {
+		return
+	}
+	dest := cibles(c.Cibles, c.Cible)
+	if len(dest) == 0 {
+		erreur(w, http.StatusBadRequest, "choisis au moins un appareil")
 		return
 	}
 	sel := selection{Chemins: c.Chemins}
@@ -540,56 +563,106 @@ func (s *Service) cEnvoyer(w http.ResponseWriter, r *http.Request) {
 		erreur(w, http.StatusBadRequest, "aucun fichier à envoyer")
 		return
 	}
-	e := &envoi{ID: securite.JetonCourt(), Cible: c.Cible, Fichiers: len(sel.Chemins), Debut: time.Now()}
+	var total int64
 	for _, ch := range sel.Chemins {
 		if st, err := os.Stat(ch); err == nil {
-			e.Total += st.Size()
+			total += st.Size()
 		}
 	}
-	s.mu.Lock()
-	s.envois[e.ID] = e
-	s.mu.Unlock()
-	go func() {
-		bilans, err := client.Envoyer(context.Background(), s.Reg, c.Cible, sel.Chemins, client.Options{
-			Paralleles: s.Cfg.Paralleles, Source: s.Source(),
-			Progres: func(fait, _ int64) { e.FaitA.Store(fait) },
-		})
-		duree := time.Since(e.Debut)
+	var ids []string
+	var tous sync.WaitGroup
+	for _, cible := range dest {
+		e := &envoi{ID: securite.JetonCourt(), Cible: cible, Fichiers: len(sel.Chemins), Total: total, Debut: time.Now()}
 		s.mu.Lock()
-		e.Fini, e.Bilans = true, bilans
-		if err != nil {
-			e.Erreur = err.Error()
-		} else if duree > 0 {
-			e.Mbits = 8 * float64(e.Total) / duree.Seconds() / 1e6
-		}
+		s.envois[e.ID] = e
 		s.mu.Unlock()
-		if sel.Temporaires && len(sel.Chemins) > 0 {
+		ids = append(ids, e.ID)
+		tous.Add(1)
+		go func() {
+			defer tous.Done()
+			s.executerEnvoi(e, sel.Chemins)
+		}()
+	}
+	if sel.Temporaires {
+		go func() { // les copies temporaires ne disparaissent qu'une fois tous les envois finis
+			tous.Wait()
 			os.RemoveAll(filepath.Dir(sel.Chemins[0]))
-		}
-		if err != nil {
-			s.Evenement("erreur", fmt.Sprintf("Envoi vers « %s » échoué : %s", c.Cible, err), "")
-		} else {
-			s.Evenement("envoye", fmt.Sprintf("Envoyé à « %s » : %d fichier(s), %s", c.Cible, len(sel.Chemins), TailleLisible(e.Total)), "")
-		}
-	}()
-	ecrireJSON(w, 200, map[string]string{"id": e.ID})
+		}()
+	}
+	ecrireJSON(w, 200, map[string]any{"id": ids[0], "ids": ids})
 }
 
+func (s *Service) executerEnvoi(e *envoi, chemins []string) {
+	bilans, err := client.Envoyer(context.Background(), s.Reg, e.Cible, chemins, client.Options{
+		Paralleles: s.Cfg.Paralleles, Source: s.Source(),
+		Progres: func(fait, _ int64) { e.FaitA.Store(fait) },
+	})
+	duree := time.Since(e.Debut)
+	s.mu.Lock()
+	e.Fini, e.Bilans = true, bilans
+	if err != nil {
+		e.Erreur = err.Error()
+	} else if duree > 0 {
+		e.Mbits = 8 * float64(e.Total) / duree.Seconds() / 1e6
+	}
+	s.mu.Unlock()
+	if err != nil {
+		s.Evenement("erreur", fmt.Sprintf("Envoi vers « %s » échoué : %s", e.Cible, err), "")
+	} else {
+		s.Evenement("envoye", fmt.Sprintf("Envoyé à « %s » : %d fichier(s), %s", e.Cible, len(chemins), TailleLisible(e.Total)), "")
+	}
+}
+
+// cLien envoie un lien ou un texte à un ou plusieurs PC ; il y est copié dans le presse-papiers.
 func (s *Service) cLien(w http.ResponseWriter, r *http.Request) {
 	var c struct {
-		Cible string `json:"cible"`
-		URL   string `json:"url"`
+		Cible  string   `json:"cible"`
+		Cibles []string `json:"cibles"`
+		URL    string   `json:"url"`
+		Texte  string   `json:"texte"`
 	}
 	if !lireJSON(w, r, &c) {
 		return
 	}
-	ctx, fin := context.WithTimeout(r.Context(), 20*time.Second)
-	defer fin()
-	if err := client.EnvoyerLien(ctx, s.Reg, c.Cible, c.URL, s.Source()); err != nil {
-		erreur(w, http.StatusBadGateway, err.Error())
+	texte := strings.TrimSpace(c.URL + c.Texte)
+	dest := cibles(c.Cibles, c.Cible)
+	if len(dest) == 0 || texte == "" {
+		erreur(w, http.StatusBadRequest, "il faut un texte et au moins un appareil")
 		return
 	}
-	ecrireJSON(w, 200, map[string]bool{"ok": true})
+	ctx, fin := context.WithTimeout(r.Context(), 20*time.Second)
+	defer fin()
+	type resultat struct {
+		Cible  string `json:"cible"`
+		Erreur string `json:"erreur,omitempty"`
+	}
+	res := make([]resultat, len(dest))
+	var tous sync.WaitGroup
+	for i, cible := range dest {
+		tous.Add(1)
+		go func() {
+			defer tous.Done()
+			res[i].Cible = cible
+			if err := client.EnvoyerLien(ctx, s.Reg, cible, texte, s.Source()); err != nil {
+				res[i].Erreur = err.Error()
+			}
+		}()
+	}
+	tous.Wait()
+	reussis := 0
+	for _, x := range res {
+		if x.Erreur == "" {
+			reussis++
+			s.Evenement("envoye", fmt.Sprintf("Lien envoyé à « %s »", x.Cible), "")
+		} else {
+			s.Evenement("erreur", fmt.Sprintf("Lien non envoyé à « %s » : %s", x.Cible, x.Erreur), "")
+		}
+	}
+	if reussis == 0 {
+		erreur(w, http.StatusBadGateway, res[0].Erreur)
+		return
+	}
+	ecrireJSON(w, 200, map[string]any{"ok": true, "resultats": res})
 }
 
 type lienQR struct {

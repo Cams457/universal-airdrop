@@ -22,13 +22,16 @@ dessus rouvre l'application.
 
 | Je veux… | Comment |
 |---|---|
-| Envoyer depuis le PC | Glisse les fichiers dans la fenêtre, puis choisis l'appareil. Ou : clic droit sur un fichier > **Envoyer vers** > **Universal Airdrop** |
+| Envoyer depuis le PC | Glisse les fichiers dans la fenêtre, **coche un ou plusieurs appareils**, puis **Envoyer**. Ou : clic droit sur un fichier > **Envoyer vers** > **Universal Airdrop** |
+| Envoyer un lien ou un texte | Colle-le dans la fenêtre (Ctrl+V), coche les appareils, **Envoyer** : il arrive **dans le presse-papiers** de l'autre PC (Ctrl+V pour le coller), avec une notification |
 | Envoyer vers un téléphone | Choisis « Un téléphone » : un QR code s'affiche, le téléphone le scanne et télécharge |
 | Envoyer depuis un téléphone | Sur le PC : **Afficher le QR code**. Le téléphone le scanne, choisit ses photos, touche **Envoyer**. Marche avec tous les téléphones |
 | Envoyer depuis le bouton Partager de l'iPhone | Ajoute ton iPhone une fois (**Ajouter un iPhone**, 5 minutes) : ensuite, dans n'importe quelle app, Partager → **Envoyer au PC** |
 | Envoyer entre deux PC | Installe l'application sur les deux, puis **Ajouter un PC** et compare le code à 6 chiffres |
 
-Les fichiers reçus arrivent dans **Téléchargements\Universal Airdrop** ; les liens s'ouvrent dans le navigateur.
+Les fichiers reçus arrivent dans **Téléchargements\Universal Airdrop**, avec une notification Windows. Les liens et
+textes reçus sont **copiés dans le presse-papiers** ; un lien http(s) s'ouvre aussi dans le navigateur (réglage
+« Ouvrir automatiquement les liens reçus »).
 
 ## Sans box : partage de connexion
 

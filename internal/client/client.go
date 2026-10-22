@@ -535,14 +535,20 @@ func (cx *Connexion) envoyerBloc(ctx context.Context, ident string, i int64, don
 	return fmt.Errorf("bloc %d : %w ; relance l'envoi pour reprendre", i, derniere)
 }
 
-// EnvoyerLien ouvre un lien sur un PC appairé.
-func EnvoyerLien(ctx context.Context, reg *appareils.Registre, cible, lien string, source Source) error {
-	if !securite.URLAutorisee(lien) {
-		return errors.New("seuls les liens http et https sont acceptés")
+// EnvoyerLien envoie un lien ou un texte à un PC appairé : il y est copié dans le presse-papiers
+// (et un lien http(s) y est ouvert si ce PC l'autorise).
+func EnvoyerLien(ctx context.Context, reg *appareils.Registre, cible, texte string, source Source) error {
+	texte = strings.TrimSpace(texte)
+	if texte == "" {
+		return errors.New("rien à envoyer")
 	}
 	cx, err := Ouvrir(ctx, reg, cible, Options{Source: source})
 	if err != nil {
 		return err
 	}
-	return posterJSON(ctx, cx.Client, cx.Base+"/api/rapide/lien", cx.auth(), map[string]string{"url": lien}, nil)
+	corps := map[string]string{"texte": texte}
+	if securite.URLAutorisee(texte) {
+		corps = map[string]string{"url": texte}
+	}
+	return posterJSON(ctx, cx.Client, cx.Base+"/api/rapide/lien", cx.auth(), corps, nil)
 }

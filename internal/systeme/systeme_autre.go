@@ -27,3 +27,9 @@ func Demarrage(bool) error         { return errNonPris }
 func EnvoyerVersActif() bool       { return false }
 func EnvoyerVers(bool) error       { return errNonPris }
 func LireEtat() Etat               { return Etat{PareFeu: true, Pris: false} }
+
+// CopierTexte : non pris en charge hors Windows.
+func CopierTexte(string) error { return errNonPris }
+
+// Notifier : sans effet hors Windows.
+func Notifier(string, string) error { return nil }

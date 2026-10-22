@@ -123,6 +123,8 @@ func lancerApplication(arrierePlan bool) {
 	}
 	s.Verbeux = false
 	s.OuvrirLien = systeme.OuvrirURL
+	s.CopierTexte = systeme.CopierTexte
+	s.Notifier = systeme.Notifier
 	if err := s.Demarrer(); err != nil {
 		fatal(err)
 	}
@@ -143,6 +145,8 @@ func demon() error {
 		return err
 	}
 	s.OuvrirLien = systeme.OuvrirURL
+	s.CopierTexte = systeme.CopierTexte
+	s.Notifier = systeme.Notifier
 	if err := s.Demarrer(); err != nil {
 		return err
 	}

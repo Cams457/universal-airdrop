@@ -175,35 +175,104 @@
       .catch(function (e) { liste.appendChild(el("p", { classe: "erreur", texte: e.message })); });
   }
 
+  // Panneau « Envoyer vers » : on coche un ou plusieurs appareils, puis « Envoyer ».
+  // courant = { selection: id } pour des fichiers, ou { texte: "…" } pour un lien ou un texte.
+  var courant = null, choisis = {};
+
   function montrerSelection(id, fichiers) {
-    $("selection").hidden = false;
+    courant = { selection: id };
     var liste = vider($("liste-selection"));
     fichiers.forEach(function (f) { liste.appendChild(el("div", { classe: "ligne" }, el("span", { classe: "nom", texte: f.nom }), el("span", { classe: "doux", texte: f.taille }))); });
-    var c = vider($("cibles"));
-    pcs().forEach(function (a) {
-      c.appendChild(el("button", { classe: "cible", onclick: function () { envoyerVers(id, a.nom); } },
+    montrerCibles();
+  }
+
+  function montrerTexte(texte) {
+    courant = { texte: texte };
+    var lien = /^https?:\/\//i.test(texte);
+    var liste = vider($("liste-selection"));
+    liste.appendChild(el("div", { classe: "ligne apercu-texte" },
+      el("span", { classe: "nom", texte: (lien ? "🔗 " : "📝 ") + (texte.length > 160 ? texte.slice(0, 160) + "…" : texte) }),
+      el("span", { classe: "doux", texte: lien ? "lien" : "texte" })));
+    liste.appendChild(el("p", { classe: "doux petit", texte: "Il sera copié dans le presse-papiers de chaque appareil choisi" + (lien ? " (et ouvert, si l'appareil l'autorise)." : ".") }));
+    montrerCibles();
+  }
+
+  function montrerCibles() {
+    $("selection").hidden = false;
+    var c = vider($("cibles")), tous = pcs();
+    // un seul PC connu : il est pré-coché ; sinon on garde les choix précédents encore valables
+    var garde = {};
+    tous.forEach(function (a) { if (choisis[a.nom]) garde[a.nom] = true; });
+    choisis = garde;
+    if (tous.length === 1) choisis[tous[0].nom] = true;
+    if (!tous.length) c.appendChild(el("p", { classe: "doux", texte: "Aucun autre PC pour l'instant : ajoute-le avec « Ajouter un PC » (carte Appareils)." }));
+    tous.forEach(function (a) {
+      var b = el("button", { classe: "cible" + (choisis[a.nom] ? " choisie" : ""), type: "button", "aria-pressed": choisis[a.nom] ? "true" : "false" },
+        el("span", { classe: "coche", "aria-hidden": "true" }),
         el("strong", null, el("span", { classe: "point" + (enLigne(a) ? " en-ligne" : "") }), a.nom),
-        el("span", { texte: enLigne(a) ? "PC · en ligne" : "PC · hors ligne ?" })));
+        el("span", { texte: enLigne(a) ? "PC · en ligne" : "PC · hors ligne ?" }));
+      b.addEventListener("click", function () {
+        choisis[a.nom] = !choisis[a.nom];
+        b.classList.toggle("choisie", choisis[a.nom]);
+        b.setAttribute("aria-pressed", choisis[a.nom] ? "true" : "false");
+        majBouton();
+      });
+      c.appendChild(b);
     });
-    c.appendChild(el("button", { classe: "cible", onclick: function () { partagerVersTelephone(id); } },
-      el("strong", { texte: "📱 Un téléphone" }), el("span", { texte: "par QR code, iPhone ou Android" })));
+    majBouton();
   }
 
-  function finSelection() { $("selection").hidden = true; history.replaceState(null, "", location.pathname); }
-  $("annuler-selection").addEventListener("click", finSelection);
+  function coches() { return Object.keys(choisis).filter(function (n) { return choisis[n]; }); }
 
-  function envoyerVers(id, nom) {
-    api("/controle/envoyer", { cible: nom, selection: id }).then(function () { finSelection(); rafraichir(); })
-      .catch(function (e) { alert(e.message); });
+  function majBouton() {
+    var n = coches().length, b = $("envoyer-choix");
+    b.disabled = n === 0;
+    b.textContent = n === 0 ? "Choisis un ou plusieurs appareils" : n === 1 ? "Envoyer à " + coches()[0] : "Envoyer aux " + n + " appareils";
   }
 
-  function partagerVersTelephone(id) {
-    api("/controle/partager", { selection: id }).then(function (r) {
+  $("envoyer-choix").addEventListener("click", function () {
+    var dest = coches(), b = $("envoyer-choix");
+    if (!dest.length || !courant) return;
+    b.disabled = true;
+    var req = courant.selection ? api("/controle/envoyer", { cibles: dest, selection: courant.selection })
+                                : api("/controle/lien", { cibles: dest, texte: courant.texte });
+    req.then(function (r) {
+      if (courant && courant.texte) {
+        var rates = (r.resultats || []).filter(function (x) { return x.erreur; });
+        if (rates.length) alert("Non envoyé à : " + rates.map(function (x) { return x.cible + " (" + x.erreur + ")"; }).join(", "));
+        $("texte-envoi").value = "";
+      }
+      finSelection(); rafraichir();
+    }).catch(function (e) { b.disabled = false; alert(e.message); });
+  });
+
+  $("envoyer-telephone").addEventListener("click", function () {
+    if (!courant) return;
+    var corps = courant.selection ? { selection: courant.selection } : { url: courant.texte };
+    if (courant.texte && !/^https?:\/\//i.test(courant.texte)) { alert("Par QR code, on ne peut partager qu'un lien http(s) ou des fichiers."); return; }
+    api("/controle/partager", corps).then(function (r) {
       finSelection();
       ouvrir(el("div", null, el("h2", { texte: "Scanne avec l'appareil photo du téléphone" }),
         blocQR(r.liens, "Lien valable 10 minutes, utilisable une seule fois.")));
     }).catch(function (e) { alert(e.message); });
+  });
+
+  function finSelection() { courant = null; $("selection").hidden = true; history.replaceState(null, "", location.pathname); }
+  $("annuler-selection").addEventListener("click", finSelection);
+
+  function preparerTexte() {
+    var t = $("texte-envoi").value.trim();
+    if (t) montrerTexte(t);
   }
+  $("bouton-texte").addEventListener("click", preparerTexte);
+  $("texte-envoi").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); preparerTexte(); } });
+  // coller un lien n'importe où dans la page (hors champ de saisie) le prépare directement
+  document.addEventListener("paste", function (e) {
+    var cible = e.target;
+    if (cible && (cible.tagName === "INPUT" || cible.tagName === "TEXTAREA")) return;
+    var t = (e.clipboardData && e.clipboardData.getData("text")) || "";
+    if (t.trim()) { $("texte-envoi").value = t.trim(); preparerTexte(); }
+  });
 
   // ---------- recevoir depuis un téléphone ----------
   $("recevoir-telephone").addEventListener("click", function () {

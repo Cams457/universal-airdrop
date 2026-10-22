@@ -21,11 +21,19 @@
       <span class="grand">Glisse des fichiers ici</span>
       <span class="doux">ou clique pour les choisir · photos, vidéos, PDF…</span>
     </label>
+    <div class="rangee texte-envoi">
+      <input type="text" id="texte-envoi" placeholder="…ou colle un lien ou un texte (il sera copié sur l'autre appareil)" maxlength="65536" autocomplete="off">
+      <button class="bouton secondaire" id="bouton-texte">Envoyer…</button>
+    </div>
     <div id="selection" class="selection" hidden>
       <div id="liste-selection"></div>
-      <p class="doux">Envoyer vers :</p>
+      <p class="titre-cibles">Envoyer vers : <span class="doux">coche un ou plusieurs appareils</span></p>
       <div id="cibles" class="cibles"></div>
-      <button class="lien-discret" id="annuler-selection">Annuler</button>
+      <div class="rangee">
+        <button class="bouton" id="envoyer-choix" disabled>Choisis un ou plusieurs appareils</button>
+        <button class="bouton secondaire" id="envoyer-telephone">📱 Un téléphone, par QR code</button>
+        <button class="lien-discret" id="annuler-selection">Annuler</button>
+      </div>
     </div>
     <div id="envois"></div>
   </section>

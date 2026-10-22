@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -147,8 +148,14 @@ func TestAppairageEtEnvoiDansLesDeuxSens(t *testing.T) {
 	if u := <-ouverts; u != "https://exemple.fr/" {
 		t.Fatalf("lien ouvert : %s", u)
 	}
-	if err := client.EnvoyerLien(context.Background(), a.Reg, "PC-B", "javascript:alert(1)", nil); err == nil {
-		t.Fatal("lien javascript: accepté")
+	// un faux lien n'est jamais ouvert : il est seulement copié, comme un texte
+	if err := client.EnvoyerLien(context.Background(), a.Reg, "PC-B", "javascript:alert(1)", nil); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case u := <-ouverts:
+		t.Fatalf("lien javascript: ouvert : %s", u)
+	case <-time.After(200 * time.Millisecond):
 	}
 }
 
@@ -300,8 +307,26 @@ func TestTelephoneEtPartages(t *testing.T) {
 	if code, _ := faire(t, c, "POST", base+"/api/rapide/fichier", nil, []byte("x")); code != 401 {
 		t.Fatal("envoi sans jeton accepté")
 	}
-	if code, _ := faire(t, c, "POST", base+"/api/rapide/lien", map[string]string{"Authorization": "Bearer " + jeton, "Content-Type": "text/plain"}, []byte("file:///C:/Windows")); code != 400 {
-		t.Fatal("lien file: accepté")
+	// lien ou texte reçu : copié dans le presse-papiers ; seul un lien http(s) est ouvert
+	var copies, ouverts []string
+	b.CopierTexte = func(x string) error { copies = append(copies, x); return nil }
+	b.OuvrirLien = func(x string) error { ouverts = append(ouverts, x); return nil }
+	b.Cfg.OuvrirLiens = true
+	auth := map[string]string{"Authorization": "Bearer " + jeton, "Content-Type": "text/plain"}
+	if code, rep := faire(t, c, "POST", base+"/api/rapide/lien", auth, []byte("https://exemple.fr/a?b=1")); code != 200 || !strings.Contains(string(rep), `"copie":true`) {
+		t.Fatalf("lien : %d %s", code, rep)
+	}
+	if code, _ := faire(t, c, "POST", base+"/api/rapide/lien", auth, []byte("file:///C:/Windows")); code != 200 {
+		t.Fatal("texte refusé")
+	}
+	if code, _ := faire(t, c, "POST", base+"/api/rapide/lien", auth, []byte("code wifi : 1234\n")); code != 200 {
+		t.Fatal("texte refusé")
+	}
+	if code, _ := faire(t, c, "POST", base+"/api/rapide/lien", auth, []byte("\x1b[31mpiège")); code != 400 {
+		t.Fatal("caractère de contrôle accepté")
+	}
+	if len(copies) != 3 || copies[2] != "code wifi : 1234" || len(ouverts) != 1 || ouverts[0] != "https://exemple.fr/a?b=1" {
+		t.Fatalf("copiés %q, ouverts %q : seul le lien http(s) doit être ouvert", copies, ouverts)
 	}
 
 	// page d'envoi pour n'importe quel téléphone
@@ -393,6 +418,56 @@ func TestControleLocal(t *testing.T) {
 	}
 	if len(tel.Profil) > 0 && !strings.HasPrefix(tel.Profil[0].QR, "data:image/png;base64,") {
 		t.Fatal("QR code absent")
+	}
+}
+
+// Un envoi vers deux PC à la fois, puis un lien vers les deux : copié dans leur presse-papiers.
+func TestEnvoiVersPlusieursPC(t *testing.T) {
+	a, b, c := creer(t, "PC-A"), creer(t, "PC-B"), creer(t, "PC-C")
+	for _, x := range []*Service{b, c} {
+		if err := appairerAB(t, a, x, true, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var mu sync.Mutex
+	copies := map[string]string{}
+	for _, x := range []*Service{b, c} {
+		x.CopierTexte = func(t string) error { mu.Lock(); copies[x.Cfg.Nom] = t; mu.Unlock(); return nil }
+	}
+	h := &http.Client{Transport: &http.Transport{Proxy: nil}}
+	url := fmt.Sprintf("http://127.0.0.1:%d", a.Cfg.PortControle())
+	ok := map[string]string{"X-Controle": a.Secret}
+	ct, corps := formulaire(t, map[string][]byte{"rapport.pdf": []byte("%PDF-1.7 contenu")})
+	_, rep := faire(t, h, "POST", url+"/controle/televerser", map[string]string{"X-Controle": a.Secret, "Content-Type": ct}, corps)
+	var sel struct{ Selection string }
+	json.Unmarshal(rep, &sel)
+	j, _ := json.Marshal(map[string]any{"cibles": []string{"PC-B", "PC-C", "pc-b"}, "selection": sel.Selection})
+	code, rep := faire(t, h, "POST", url+"/controle/envoyer", ok, j)
+	var ids struct{ IDs []string }
+	json.Unmarshal(rep, &ids)
+	if code != 200 || len(ids.IDs) != 2 {
+		t.Fatalf("envoi multiple : %d %s", code, rep)
+	}
+	for _, x := range []*Service{b, c} {
+		chemin := filepath.Join(x.Cfg.DossierReception(), "rapport.pdf")
+		for range 100 {
+			if _, err := os.Stat(chemin); err == nil {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if got, _ := os.ReadFile(chemin); string(got) != "%PDF-1.7 contenu" {
+			t.Fatalf("%s n'a pas reçu le fichier", x.Cfg.Nom)
+		}
+	}
+	j, _ = json.Marshal(map[string]any{"cibles": []string{"PC-B", "PC-C"}, "texte": "https://exemple.fr/partage"})
+	if code, rep := faire(t, h, "POST", url+"/controle/lien", ok, j); code != 200 {
+		t.Fatalf("lien multiple : %d %s", code, rep)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if copies["PC-B"] != "https://exemple.fr/partage" || copies["PC-C"] != "https://exemple.fr/partage" {
+		t.Fatalf("presse-papiers : %v", copies)
 	}
 }
 

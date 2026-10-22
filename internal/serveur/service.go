@@ -37,6 +37,9 @@ type Evenement struct {
 	Type   string    `json:"type"` // recu, lien, envoye, info, erreur
 	Texte  string    `json:"texte"`
 	Chemin string    `json:"chemin,omitempty"`
+	// Titre et Corps : la notification Windows à afficher (vide = aucune).
+	Titre string `json:"-"`
+	Corps string `json:"-"`
 }
 
 // Service : l'état complet du démon.
@@ -53,6 +56,10 @@ type Service struct {
 	SurEvenement func(Evenement)
 	// OuvrirLien est remplaçable par les tests.
 	OuvrirLien func(string) error
+	// CopierTexte met un lien ou un texte reçu dans le presse-papiers (nil : désactivé).
+	CopierTexte func(string) error
+	// Notifier affiche une notification système (nil : aucune).
+	Notifier func(titre, corps string) error
 
 	mu          sync.Mutex
 	receptions  map[string]*blocs.Reception
@@ -62,6 +69,13 @@ type Service struct {
 	selections  map[string]selection
 	evenements  []Evenement
 	echecs      map[string][]time.Time
+	attente     struct { // fichiers reçus en attente de notification groupée
+		n      int
+		auteur string
+		nom    string
+		total  int64
+		minute *time.Timer
+	}
 
 	public, controle *http.Server
 	annuler          context.CancelFunc
@@ -92,7 +106,16 @@ func (s *Service) temporaire() string { return filepath.Join(s.Cfg.Donnees, "tem
 
 // Evenement enregistre un événement (40 derniers gardés) et le journalise.
 func (s *Service) Evenement(type_, texte, chemin string) {
-	e := Evenement{Heure: time.Now(), Type: type_, Texte: texte, Chemin: chemin}
+	s.evenement(Evenement{Heure: time.Now(), Type: type_, Texte: texte, Chemin: chemin})
+}
+
+// EvenementNotifie : un événement accompagné d'une notification Windows.
+func (s *Service) EvenementNotifie(type_, texte, chemin, titre, corps string) {
+	s.evenement(Evenement{Heure: time.Now(), Type: type_, Texte: texte, Chemin: chemin, Titre: titre, Corps: corps})
+}
+
+func (s *Service) evenement(e Evenement) {
+	texte := e.Texte
 	s.mu.Lock()
 	s.evenements = append(s.evenements, e)
 	if len(s.evenements) > 40 {
@@ -110,6 +133,48 @@ func (s *Service) Evenement(type_, texte, chemin string) {
 	if s.SurEvenement != nil {
 		go s.SurEvenement(e)
 	}
+	if e.Titre != "" && s.Notifier != nil {
+		go s.Notifier(e.Titre, e.Corps)
+	}
+}
+
+// regroupement : une rafale de fichiers (40 photos) donne une seule notification.
+const regroupement = 1500 * time.Millisecond
+
+// recu enregistre un fichier reçu et programme une notification groupée.
+func (s *Service) recu(auteur, chemin string, taille int64) {
+	s.Evenement("recu", fmt.Sprintf("Reçu de « %s » : %s (%s)", auteur, filepath.Base(chemin), TailleLisible(taille)), chemin)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a := &s.attente
+	if a.n > 0 && a.auteur != auteur {
+		a.auteur = "plusieurs appareils"
+	} else {
+		a.auteur = auteur
+	}
+	a.n++
+	a.nom = filepath.Base(chemin)
+	a.total += taille
+	if a.minute != nil {
+		a.minute.Stop()
+	}
+	a.minute = time.AfterFunc(regroupement, s.notifierRecus)
+}
+
+func (s *Service) notifierRecus() {
+	s.mu.Lock()
+	a := s.attente
+	s.attente.n, s.attente.total, s.attente.minute = 0, 0, nil
+	s.mu.Unlock()
+	if a.n == 0 || s.Notifier == nil {
+		return
+	}
+	titre, corps := "Fichier reçu de "+a.auteur, a.nom+" · "+TailleLisible(a.total)
+	if a.n > 1 {
+		titre = fmt.Sprintf("%d fichiers reçus de %s", a.n, a.auteur)
+		corps = TailleLisible(a.total) + " · dossier « Universal Airdrop » des Téléchargements"
+	}
+	_ = s.Notifier(titre, corps)
 }
 
 // Source d'adresses pour le client : la découverte de ce démon.

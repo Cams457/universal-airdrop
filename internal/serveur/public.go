@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Cams457/universal-airdrop/internal/appareils"
 	"github.com/Cams457/universal-airdrop/internal/blocs"
@@ -256,7 +257,7 @@ func (s *Service) transfertTerminer(w http.ResponseWriter, r *http.Request) {
 	delete(s.receptions, r.PathValue("ident"))
 	s.mu.Unlock()
 	st, _ := os.Stat(final)
-	s.Evenement("recu", fmt.Sprintf("Reçu de « %s » : %s (%s)", a.Nom, filepath.Base(final), TailleLisible(st.Size())), final)
+	s.recu(a.Nom, final, st.Size())
 	ecrireJSON(w, 200, map[string]any{"nom": filepath.Base(final), "taille": st.Size()})
 }
 
@@ -307,7 +308,7 @@ func (s *Service) ecrireFlux(src io.Reader, nom, auteur string) (string, error) 
 		return "", err
 	}
 	st, _ := os.Stat(final)
-	s.Evenement("recu", fmt.Sprintf("Reçu de « %s » : %s (%s)", auteur, filepath.Base(final), TailleLisible(st.Size())), final)
+	s.recu(auteur, final, st.Size())
 	return final, nil
 }
 
@@ -383,42 +384,84 @@ func (s *Service) rapideFichier(w http.ResponseWriter, r *http.Request) {
 	s.recevoirFormulaire(w, r, a.Nom)
 }
 
+// TexteMax : taille maximale d'un lien ou d'un texte envoyé (le reste passe par un fichier).
+const TexteMax = 64 << 10
+
+// texteAcceptable : texte non vide, UTF-8 valide, sans caractère de contrôle hors tabulation et
+// retour à la ligne (évite d'injecter des séquences d'échappement dans un terminal où on le colle).
+func texteAcceptable(t string) bool {
+	if t == "" || len(t) > TexteMax || !utf8.ValidString(t) {
+		return false
+	}
+	for _, c := range t {
+		if c < 0x20 && c != '\n' && c != '\t' && c != '\r' || c == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+// rapideLien reçoit un lien ou un texte : il est copié dans le presse-papiers (Ctrl+V) et,
+// pour un lien http(s), ouvert dans le navigateur si le réglage est actif.
 func (s *Service) rapideLien(w http.ResponseWriter, r *http.Request) {
 	a, _, ok := s.authentifier(w, r)
 	if !ok {
 		return
 	}
-	corps, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<10))
-	lien := ""
+	corps, err := io.ReadAll(http.MaxBytesReader(w, r.Body, TexteMax+1024))
+	if err != nil {
+		erreur(w, http.StatusRequestEntityTooLarge, "texte trop long : envoie-le plutôt comme fichier")
+		return
+	}
+	texte := ""
 	ct := r.Header.Get("Content-Type")
 	switch {
 	case strings.HasPrefix(ct, "application/json"):
 		var c struct {
-			URL string `json:"url"`
+			URL   string `json:"url"`
+			Texte string `json:"texte"`
 		}
 		_ = json.Unmarshal(corps, &c)
-		lien = c.URL
+		texte = c.URL + c.Texte
 	case strings.HasPrefix(ct, "application/x-www-form-urlencoded"):
 		v, _ := url.ParseQuery(string(corps))
-		lien = v.Get("url")
+		texte = v.Get("url") + v.Get("texte")
 	default:
-		lien = string(corps)
+		texte = string(corps)
 	}
-	lien = strings.TrimSpace(lien)
-	if !securite.URLAutorisee(lien) {
-		erreur(w, http.StatusBadRequest, "lien refusé : seuls http et https sont acceptés")
+	texte = strings.TrimSpace(texte)
+	if !texteAcceptable(texte) {
+		erreur(w, http.StatusBadRequest, "texte vide, trop long ou contenant des caractères de contrôle")
 		return
 	}
+	estLien := securite.URLAutorisee(texte)
 	if f, err := os.OpenFile(filepath.Join(s.Cfg.Donnees, "liens.txt"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
-		fmt.Fprintf(f, "%s  %s  %s\n", time.Now().Format(time.RFC3339), a.Nom, lien)
+		fmt.Fprintf(f, "%s  %s  %s\n", time.Now().Format(time.RFC3339), a.Nom, strings.ReplaceAll(texte, "\n", " "))
 		f.Close()
 	}
+	copie := s.CopierTexte != nil && s.CopierTexte(texte) == nil
 	ouvert := false
-	if s.Cfg.OuvrirLiens && s.OuvrirLien != nil {
-		ouvert = s.OuvrirLien(lien) == nil
+	if estLien && s.Cfg.OuvrirLiens && s.OuvrirLien != nil {
+		ouvert = s.OuvrirLien(texte) == nil
 	}
-	s.Evenement("lien", fmt.Sprintf("Lien reçu de « %s » : %s", a.Nom, lien), "")
-	ecrireJSON(w, 200, map[string]any{"ouvert": ouvert})
+	quoi, apercu := "Texte", texte
+	if estLien {
+		quoi = "Lien"
+	}
+	if len([]rune(apercu)) > 140 {
+		apercu = string([]rune(apercu)[:140]) + "…"
+	}
+	corpsNotif := apercu
+	if copie {
+		corpsNotif = "Copié : Ctrl+V pour le coller.\n" + apercu
+	}
+	suffixe := ""
+	if copie {
+		suffixe = " (copié dans le presse-papiers)"
+	}
+	s.EvenementNotifie("lien", fmt.Sprintf("%s reçu de « %s »%s : %s", quoi, a.Nom, suffixe, apercu), "",
+		fmt.Sprintf("%s reçu de %s", quoi, a.Nom), corpsNotif)
+	ecrireJSON(w, 200, map[string]any{"ouvert": ouvert, "copie": copie, "lien": estLien})
 }
 
 // pageEnvoi : page d'envoi téléphone -> PC, pour n'importe quel téléphone (Android compris).
