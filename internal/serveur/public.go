@@ -585,7 +585,14 @@ func (s *Service) rapideLien(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(f, "%s  %s  %s\n", time.Now().Format(time.RFC3339), auteur, strings.ReplaceAll(texte, "\n", " "))
 		f.Close()
 	}
-	copie := s.CopierTexte != nil && s.CopierTexte(texte) == nil
+	copie, raison := false, "presse-papiers non pris en charge sur ce système"
+	if s.CopierTexte != nil {
+		if err := s.CopierTexte(texte); err == nil {
+			copie = true
+		} else {
+			raison = err.Error()
+		}
+	}
 	ouvert := false
 	if estLien && s.Cfg.OuvrirLiens && s.OuvrirLien != nil {
 		ouvert = s.OuvrirLien(texte) == nil
@@ -601,7 +608,7 @@ func (s *Service) rapideLien(w http.ResponseWriter, r *http.Request) {
 	if copie {
 		corpsNotif = "Copié : Ctrl+V pour le coller.\n" + apercu
 	}
-	suffixe := ""
+	suffixe := " (NON copié : " + raison + ")"
 	if copie {
 		suffixe = " (copié dans le presse-papiers)"
 	}

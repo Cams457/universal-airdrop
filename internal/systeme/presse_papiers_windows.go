@@ -3,7 +3,7 @@
 package systeme
 
 import (
-	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
@@ -29,6 +29,8 @@ var (
 	pGlobalUnlock     = kernel32.NewProc("GlobalUnlock")
 	pGlobalSize       = kernel32.NewProc("GlobalSize")
 	pMoveMemory       = kernel32.NewProc("RtlMoveMemory")
+	pCreateWindowEx   = user32.NewProc("CreateWindowExW")
+	pDestroyWindow    = user32.NewProc("DestroyWindow")
 )
 
 const (
@@ -36,16 +38,29 @@ const (
 	gmemMoveable  = 0x0002 // GMEM_MOVEABLE
 )
 
+// fenetreProprietaire : une fenêtre invisible (« message-only ») qui possède le presse-papiers.
+// Avec OpenClipboard(NULL), EmptyClipboard laisse le presse-papiers sans propriétaire et, selon la
+// documentation de Microsoft, SetClipboardData peut alors échouer.
+func fenetreProprietaire() uintptr {
+	classe, _ := windows.UTF16PtrFromString("STATIC")
+	const hwndMessage = ^uintptr(2) // HWND_MESSAGE = (HWND)-3
+	h, _, _ := pCreateWindowEx.Call(0, uintptr(unsafe.Pointer(classe)), 0, 0, 0, 0, 0, 0, hwndMessage, 0, 0, 0)
+	return h
+}
+
 // ouvrirPressePapiers : le presse-papiers est un verrou global ; une autre application peut le
 // tenir quelques millisecondes, d'où les essais répétés.
-func ouvrirPressePapiers() error {
+func ouvrirPressePapiers(proprietaire uintptr) error {
+	var derniere error
 	for i := 0; i < 40; i++ {
-		if r, _, _ := pOpenClipboard.Call(0); r != 0 {
+		r, _, err := pOpenClipboard.Call(proprietaire)
+		if r != 0 {
 			return nil
 		}
+		derniere = err
 		time.Sleep(25 * time.Millisecond)
 	}
-	return errors.New("presse-papiers occupé par une autre application")
+	return fmt.Errorf("presse-papiers occupé par une autre application (%v)", derniere)
 }
 
 // CopierTexte place le texte dans le presse-papiers de Windows (Ctrl+V pour le coller).
@@ -55,25 +70,31 @@ func CopierTexte(t string) error {
 	u := utf16.Encode([]rune(strings.ReplaceAll(t, "\x00", "")))
 	u = append(u, 0)
 	taille := uintptr(len(u) * 2)
-	if err := ouvrirPressePapiers(); err != nil {
+	proprietaire := fenetreProprietaire()
+	if proprietaire != 0 {
+		defer pDestroyWindow.Call(proprietaire) // après CloseClipboard (defer en ordre inverse)
+	}
+	if err := ouvrirPressePapiers(proprietaire); err != nil {
 		return err
 	}
 	defer pCloseClipboard.Call()
-	pEmptyClipboard.Call()
+	if r, _, err := pEmptyClipboard.Call(); r == 0 {
+		return fmt.Errorf("EmptyClipboard : %v", err)
+	}
 	h, _, err := pGlobalAlloc.Call(gmemMoveable, taille)
 	if h == 0 {
-		return err
+		return fmt.Errorf("GlobalAlloc : %v", err)
 	}
 	p, _, err := pGlobalLock.Call(h)
 	if p == 0 {
 		pGlobalFree.Call(h)
-		return err
+		return fmt.Errorf("GlobalLock : %v", err)
 	}
 	pMoveMemory.Call(p, uintptr(unsafe.Pointer(&u[0])), taille)
 	pGlobalUnlock.Call(h)
 	if r, _, err := pSetClipboardData.Call(cfUnicodeText, h); r == 0 {
 		pGlobalFree.Call(h) // sinon le système en devient propriétaire
-		return err
+		return fmt.Errorf("SetClipboardData : %v", err)
 	}
 	return nil
 }
@@ -82,7 +103,7 @@ func CopierTexte(t string) error {
 func LireTexte() (string, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	if err := ouvrirPressePapiers(); err != nil {
+	if err := ouvrirPressePapiers(0); err != nil {
 		return "", err
 	}
 	defer pCloseClipboard.Call()
