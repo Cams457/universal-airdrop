@@ -18,6 +18,7 @@ import (
 
 	"github.com/Cams457/universal-airdrop/internal/appareils"
 	"github.com/Cams457/universal-airdrop/internal/blocs"
+	"github.com/Cams457/universal-airdrop/internal/boite"
 	"github.com/Cams457/universal-airdrop/internal/client"
 	"github.com/Cams457/universal-airdrop/internal/config"
 	"github.com/Cams457/universal-airdrop/internal/decouverte"
@@ -48,6 +49,7 @@ type Service struct {
 	ID         *identite.Identite
 	Reg        *appareils.Registre
 	Partages   *partage.Registre
+	Boites     *boite.Boites
 	Decouverte *decouverte.Decouverte
 	Mdns       *mdns.Annonce
 	Secret     string
@@ -69,7 +71,9 @@ type Service struct {
 	selections  map[string]selection
 	evenements  []Evenement
 	echecs      map[string][]time.Time
-	attente     struct { // fichiers reçus en attente de notification groupée
+	distants    map[string][]string // téléphones des PC appairés (relais)
+	demandes    map[string]*demande // iPhone demandant à être ajouté (sans QR code)
+	attente     struct {            // fichiers reçus en attente de notification groupée
 		n      int
 		auteur string
 		nom    string
@@ -91,7 +95,8 @@ func Nouveau(cfg *config.Config) (*Service, error) {
 	s := &Service{Cfg: cfg, ID: id, Reg: appareils.Ouvrir(cfg.Donnees), Partages: partage.NouveauRegistre(),
 		Secret: securite.NouveauJeton(), Verbeux: true, receptions: map[string]*blocs.Reception{},
 		appairagesA: map[string]*appairageA{}, envois: map[string]*envoi{}, selections: map[string]selection{},
-		echecs: map[string][]time.Time{}}
+		echecs: map[string][]time.Time{}, distants: map[string][]string{}, demandes: map[string]*demande{},
+		Boites: boite.Ouvrir(cfg.Donnees)}
 	s.Partages.SurFin = func(p *partage.Partage) {
 		if p.Temporaires && len(p.Fichiers) > 0 {
 			os.RemoveAll(filepath.Dir(p.Fichiers[0]))
@@ -202,6 +207,7 @@ func (s *Service) Demarrer() error {
 		return err
 	}
 	os.RemoveAll(s.temporaire())
+	s.nettoyerRelais()
 	ctx, annuler := context.WithCancel(context.Background())
 	s.annuler = annuler
 
@@ -256,6 +262,8 @@ func (s *Service) Demarrer() error {
 func (s *Service) surveiller(ctx context.Context) {
 	t := time.NewTicker(10 * time.Second)
 	defer t.Stop()
+	go s.rafraichirDistants(ctx)
+	tour := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -270,6 +278,10 @@ func (s *Service) surveiller(ctx context.Context) {
 		}
 		s.Partages.Nettoyer()
 		s.nettoyer()
+		s.Boites.Nettoyer()
+		if tour++; tour%3 == 0 {
+			go s.rafraichirDistants(ctx)
+		}
 	}
 }
 
@@ -284,6 +296,11 @@ func (s *Service) nettoyer() {
 	for id, e := range s.envois {
 		if e.Fini && time.Since(e.Debut) > 30*time.Minute {
 			delete(s.envois, id)
+		}
+	}
+	for k, d := range s.demandes {
+		if time.Since(d.Cree) > 2*dureeDemande {
+			delete(s.demandes, k)
 		}
 	}
 }

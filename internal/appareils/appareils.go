@@ -199,11 +199,55 @@ func (r *Registre) Liste() []Ligne {
 	for fp, p := range r.d.PCs {
 		l = append(l, Ligne{Nom: p.Nom, Type: "pc", Adresse: p.Adresse, Empreinte: fp})
 	}
-	for _, a := range r.d.Jetons {
-		if a.Type == "telephone" {
-			l = append(l, Ligne{Nom: a.Nom, Type: "telephone"})
-		}
+	for _, nom := range r.telephones() {
+		l = append(l, Ligne{Nom: nom, Type: "telephone"})
 	}
 	sort.Slice(l, func(i, j int) bool { return l[i].Type+l[i].Nom < l[j].Type+l[j].Nom })
+	return l
+}
+
+// telephones : noms des téléphones, sans doublon (un iPhone ajouté deux fois sous le même nom
+// n'apparaît qu'une fois et garde une seule boîte d'envoi). Appelant : verrou tenu.
+func (r *Registre) telephones() []string {
+	vus := map[string]bool{}
+	var l []string
+	for _, a := range r.d.Jetons {
+		if a.Type == "telephone" && !vus[strings.ToLower(a.Nom)] {
+			vus[strings.ToLower(a.Nom)] = true
+			l = append(l, a.Nom)
+		}
+	}
+	sort.Strings(l)
+	return l
+}
+
+// Telephones renvoie les noms des téléphones de confiance.
+func (r *Registre) Telephones() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.rafraichir()
+	return r.telephones()
+}
+
+// TrouverTelephone renvoie le nom exact d'un téléphone de confiance (casse ignorée).
+func (r *Registre) TrouverTelephone(nom string) (string, bool) {
+	for _, t := range r.Telephones() {
+		if strings.EqualFold(t, strings.TrimSpace(nom)) {
+			return t, true
+		}
+	}
+	return "", false
+}
+
+// NomsPC renvoie les noms des PC appairés.
+func (r *Registre) NomsPC() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.rafraichir()
+	var l []string
+	for _, p := range r.d.PCs {
+		l = append(l, p.Nom)
+	}
+	sort.Strings(l)
 	return l
 }

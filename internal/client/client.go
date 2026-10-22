@@ -18,6 +18,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -280,6 +281,11 @@ type Options struct {
 	Progres       func(fait, total int64)
 	AvantEnvoi    func(ipPair string) bool
 	Source        Source
+	// De : appareil d'origine quand ce PC relaie (ex. « iPhone de Camil »), affiché par le receveur.
+	De string
+	// Pour : téléphones du PC distant à qui remettre le fichier (sa boîte d'envoi), au lieu de le
+	// garder lui-même.
+	Pour []string
 }
 
 func (o *Options) normaliser() {
@@ -298,6 +304,8 @@ func (o *Options) normaliser() {
 type Connexion struct {
 	Base, Jeton, Nom string
 	Client           *http.Client
+	De               string
+	Pour             []string
 }
 
 // Ouvrir résout l'adresse d'un pair appairé et vérifie qu'il répond, avec sa CA épinglée.
@@ -316,11 +324,18 @@ func Ouvrir(ctx context.Context, reg *appareils.Registre, cible string, o Option
 	if err != nil {
 		return nil, err
 	}
-	return &Connexion{Base: base, Jeton: pc.JetonSortant, Nom: pc.Nom, Client: c}, nil
+	return &Connexion{Base: base, Jeton: pc.JetonSortant, Nom: pc.Nom, Client: c, De: o.De, Pour: o.Pour}, nil
 }
 
 func (c *Connexion) auth() map[string]string {
-	return map[string]string{"Authorization": "Bearer " + c.Jeton}
+	h := map[string]string{"Authorization": "Bearer " + c.Jeton}
+	if c.De != "" {
+		h["X-De"] = url.QueryEscape(c.De)
+	}
+	if len(c.Pour) > 0 {
+		h["X-Pour"] = url.QueryEscape(strings.Join(c.Pour, "|"))
+	}
+	return h
 }
 
 // IP du pair joint.
@@ -538,11 +553,16 @@ func (cx *Connexion) envoyerBloc(ctx context.Context, ident string, i int64, don
 // EnvoyerLien envoie un lien ou un texte à un PC appairé : il y est copié dans le presse-papiers
 // (et un lien http(s) y est ouvert si ce PC l'autorise).
 func EnvoyerLien(ctx context.Context, reg *appareils.Registre, cible, texte string, source Source) error {
+	return EnvoyerTexte(ctx, reg, cible, texte, Options{Source: source})
+}
+
+// EnvoyerTexte : comme EnvoyerLien, avec relais possible (o.De, o.Pour).
+func EnvoyerTexte(ctx context.Context, reg *appareils.Registre, cible, texte string, o Options) error {
 	texte = strings.TrimSpace(texte)
 	if texte == "" {
 		return errors.New("rien à envoyer")
 	}
-	cx, err := Ouvrir(ctx, reg, cible, Options{Source: source})
+	cx, err := Ouvrir(ctx, reg, cible, o)
 	if err != nil {
 		return err
 	}
@@ -551,4 +571,31 @@ func EnvoyerLien(ctx context.Context, reg *appareils.Registre, cible, texte stri
 		corps = map[string]string{"url": texte}
 	}
 	return posterJSON(ctx, cx.Client, cx.Base+"/api/rapide/lien", cx.auth(), corps, nil)
+}
+
+// Telephones demande à un PC appairé la liste de ses téléphones (pour les joindre par relais).
+func Telephones(ctx context.Context, reg *appareils.Registre, cible string, source Source) ([]string, error) {
+	cx, err := Ouvrir(ctx, reg, cible, Options{Source: source})
+	if err != nil {
+		return nil, err
+	}
+	req, _ := http.NewRequestWithContext(ctx, "GET", cx.Base+"/api/v1/telephones", nil)
+	for k, v := range cx.auth() {
+		req.Header.Set(k, v)
+	}
+	r, err := cx.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Body.Close()
+	if err := verifier(r); err != nil {
+		return nil, err
+	}
+	var c struct {
+		Telephones []string `json:"telephones"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&c); err != nil {
+		return nil, err
+	}
+	return c.Telephones, nil
 }

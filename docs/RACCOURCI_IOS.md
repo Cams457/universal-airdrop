@@ -1,103 +1,174 @@
-# Raccourci iPhone « Envoyer au PC »
+# Raccourcis iPhone « Envoyer » et « Recevoir » (v2)
 
-Objectif : dans n'importe quelle app (Photos, Fichiers, Safari…), **Partager → Envoyer au PC**, et c'est
-envoyé, sans rien saisir.
+Deux Raccourcis, construits une seule fois, et plus aucun QR code ensuite :
 
-Sans Raccourci, l'iPhone peut déjà envoyer : sur le PC, **Afficher le QR code**, puis scanne-le.
-Le Raccourci ajoute simplement le confort du bouton Partager.
+| Raccourci | Ce qu'il fait |
+|---|---|
+| **Envoyer** | Dans n'importe quelle app : **Partager → Envoyer**, tu coches un ou plusieurs appareils (PC, autre iPhone, iPad), c'est parti. Un lien ou un texte arrive **dans le presse-papiers** de l'autre appareil. |
+| **Recevoir** | Récupère ce que les PC t'ont envoyé : photos et vidéos dans **Photos**, autres fichiers dans **Fichiers**, liens et textes **copiés** (colle-les où tu veux). Il peut se lancer **tout seul** en arrivant sur ton Wi-Fi. |
 
-Une limite d'iOS : la rangée d'icônes du haut de la feuille de partage (AirDrop, contacts, apps) est
-réservée aux applications installées. Un Raccourci apparaît dans la liste juste en dessous ; on peut
-l'épingler en **Favoris** pour qu'il soit toujours en tête (étape 5).
+**Pourquoi « Recevoir » et pas une réception instantanée ?** Sans application de l'App Store, iOS ne
+laisse rien tourner en permanence sur l'iPhone : il ne peut pas « écouter » le PC. Le PC garde donc ce
+qui t'est destiné dans une **boîte d'envoi** (7 jours), et « Recevoir » vient la vider. Une vraie
+application demanderait un Mac et un compte développeur Apple (99 €/an).
 
-## Prérequis : ajouter l'iPhone (une fois par PC)
+Une limite d'iOS : la rangée d'icônes du haut de la feuille de partage (AirDrop, contacts) est réservée
+aux applications. Un Raccourci apparaît dans la liste juste en dessous ; on peut le mettre en
+**Favoris** pour qu'il soit en tête (étape 5).
 
-Dans l'application sur le PC : **Ajouter un iPhone**, puis suis les trois étapes :
-1. **Installer le certificat du PC.** Scanne le QR code et ouvre la page dans **Safari** : elle guide
-   pas à pas (télécharger le profil, l'installer, puis activer la confiance dans Réglages > Général >
-   Informations > Réglages des certificats). Vérifie que l'empreinte SHA-256 affichée par l'iPhone est
-   identique à celle du PC : c'est ce qui garantit que personne n'a glissé son propre certificat.
+## Prérequis : relier l'iPhone à un PC (une fois, sans QR code)
 
-   *Le certificat n'apparaît pas dans « Réglages des certificats » ?* Cette ligne n'existe qu'une fois
-   le profil **installé**. Cherche le profil en haut de Réglages (« Profil téléchargé ») ou dans
-   Général > VPN et gestion de l'appareil ; iOS l'efface s'il n'est pas installé dans les 8 minutes.
-   Sinon, retélécharge-le : le lien reste valable.
-2. **Récupérer le jeton.** Scanne le second QR code ; la page montre le **jeton** et l'**adresse** du PC
-   (par exemple `https://pc-de-camil.local:47800`). Copie-les : la page ne s'affiche qu'une fois.
-3. **Le Raccourci** : si quelqu'un l'a déjà partagé (lien iCloud), installe-le et colle le jeton et
-   l'adresse quand il les demande. Sinon, construis-le une fois avec le guide ci-dessous.
+1. Sur le PC : **Ajouter un iPhone**. L'application affiche une adresse, par exemple
+   `pc-de-camil.local:47800/iphone`.
+2. Sur l'iPhone, ouvre **Safari** et tape cette adresse (ou scanne le QR code proposé, c'est la même chose).
+   Si Safari parle de connexion non privée : **Afficher les détails** > **visiter ce site web**.
+3. La page guide pas à pas :
+   1. **Télécharger le profil**, puis **Autoriser** ;
+   2. Réglages > **Profil téléchargé** > **Installer** (sinon : Général > VPN et gestion de l'appareil) ;
+   3. Réglages > Général > Informations > **Réglages des certificats** > active *Universal Airdrop CA* ;
+      vérifie que l'empreinte SHA-256 est la même que sur le PC ;
+   4. **Relier cet iPhone** : donne-lui un nom (par exemple `iPhone de Camil`). Le PC ouvre une fenêtre
+      avec un code à 6 chiffres : s'il est identique à celui de l'iPhone, **Accepter**.
+4. La page affiche alors l'**adresse du PC** et ton **jeton**. Copie-les : les deux Raccourcis les
+   demandent. Le jeton ne s'affiche qu'une fois.
 
-## Construire le Raccourci (10 minutes)
+**Un seul PC suffit**, même si tu en as plusieurs : ce PC relaie vers les autres (et vers leurs
+téléphones). Il doit simplement être allumé quand tu envoies ou reçois.
 
-Ouvre l'app **Raccourcis** > **+**.
+---
 
-### 1. Nom et icône
-Touche le nom en haut > **Renommer** > `Envoyer au PC`. Choisis une icône (un ordinateur).
+## Raccourci 1 : « Envoyer » (10 minutes)
 
-### 2. Accepter ce qu'on partage
-Touche **(i)** ou le menu ⌄ près du nom > **Détails** :
+App **Raccourcis** > **+**. Touche le nom en haut > **Renommer** > `Envoyer`. Icône : un avion en papier.
+
+### Réglages du Raccourci
+Touche **(i)** (ou le menu ⌄ près du nom) :
 - active **Afficher dans la feuille de partage** ;
-- dans **Types acceptés**, garde : *Images, Médias, Fichiers, URL*.
+- **Types acceptés** : *Images, Médias, Fichiers, URL, Texte* ;
+- « Si aucune entrée » : **Arrêter et répondre**.
 
-Dans « Si aucune entrée », choisis **Arrêter et répondre**.
+### Les actions, dans l'ordre
+Tape le nom de chaque action dans la barre de recherche en bas.
 
-### 3. Les actions, dans l'ordre
-
-| # | Action à ajouter (barre de recherche) | Réglage |
+| # | Action | Réglage |
 |---|---|---|
-| 1 | **Texte** | colle ton jeton ; touche la variable produite > Renommer > `Jeton` |
-| 2 | **Texte** | colle l'adresse du PC, par exemple `https://pc-de-camil.local:47800` ; renomme la variable `Adresse` |
-| 3 | **Répéter avec chaque élément** | dans : *Entrée du raccourci* |
-| 4 | ↳ **Obtenir le type** | de : *Élément répété* |
-| 5 | ↳ **Si** | *Type* **est** `URL` |
-| 6 | ↳↳ **Obtenir le contenu de l'URL** | URL : `Adresse` + `/api/rapide/lien` · réglages A |
-| 7 | ↳ **Sinon** | |
-| 8 | ↳↳ **Obtenir le contenu de l'URL** | URL : `Adresse` + `/api/rapide/fichier` · réglages B |
-| 9 | ↳ **Fin si** | |
-| 10 | **Fin de la répétition** | |
-| 11 | **Afficher une notification** | `Envoyé au PC` |
+| 1 | **Texte** | colle l'adresse du PC, par exemple `https://pc-de-camil.local:47800` |
+| 2 | **Définir la variable** | nom : `Adresse` ; valeur : *Texte* |
+| 3 | **Texte** | colle ton jeton |
+| 4 | **Définir la variable** | nom : `Jeton` ; valeur : *Texte* |
+| 5 | **Obtenir le contenu de l'URL** | URL : `Adresse` puis `/api/rapide/destinations` · réglages **G** |
+| 6 | **Obtenir la valeur du dictionnaire** | Obtenir **Valeur** pour la clé `destinations` dans *Contenu de l'URL* |
+| 7 | **Choisir dans la liste** | liste : *Valeur du dictionnaire* ; invite : `Envoyer à…` ; active **Sélectionner plusieurs** |
+| 8 | **Combiner le texte** | *Élément choisi*, avec le séparateur **Personnalisé** `\|` (barre verticale) |
+| 9 | **Encoder l'URL** | *Texte combiné* (en anglais : *URL Encode*) |
+| 10 | **Définir la variable** | nom : `Destinations` ; valeur : *Texte encodé* |
+| 11 | **Répéter avec chaque élément** | dans : *Entrée du raccourci* |
+| 12 | ↳ **Obtenir le type** | de : *Élément répété* |
+| 13 | ↳ **Si** | *Type* **est** `URL` ; touche **Ajouter une condition** : *Type* **est** `Texte`, et choisis **N'importe laquelle** |
+| 14 | ↳↳ **Obtenir le contenu de l'URL** | URL : `Adresse` puis `/api/rapide/lien` · réglages **L** |
+| 15 | ↳ **Sinon** | |
+| 16 | ↳↳ **Obtenir le contenu de l'URL** | URL : `Adresse` puis `/api/rapide/fichier` · réglages **F** |
+| 17 | ↳ **Fin si** | |
+| 18 | **Fin de la répétition** | |
+| 19 | **Afficher une notification** | `Envoyé ✓` |
 
-**Réglages A (lien)**, dans « Afficher plus » de l'action :
+Pour coller une variable (`Adresse`, `Jeton`…) dans un champ : touche le champ, puis la variable dans
+la barre au-dessus du clavier (ou **Sélectionner une variable**).
+
+**Réglages G** (touche **Afficher plus** sur l'action) :
+- Méthode : **GET**
+- En-têtes : **Ajouter un nouvel en-tête** : clé `Authorization`, texte `Bearer ` (avec l'espace) suivi de la variable `Jeton`
+
+**Réglages L (lien ou texte)** :
 - Méthode : **POST**
-- En-têtes : `Authorization` = `Bearer ` suivi de la variable `Jeton` (avec un espace après Bearer)
-- Corps de la requête : **JSON**, avec un champ texte de clé `url` et de valeur *Élément répété*
+- En-têtes : `Authorization` = `Bearer ` + `Jeton` ; `X-Destinations` = variable `Destinations`
+- Corps de la requête : **JSON** ; ajoute un champ **Texte** de clé `texte` et de valeur *Élément répété*
 
-**Réglages B (fichier)** :
+**Réglages F (fichier)** :
 - Méthode : **POST**
-- En-têtes : `Authorization` = `Bearer ` + `Jeton`
-- Corps de la requête : **Formulaire**, avec un champ de type **Fichier**, de clé `fichier` et de valeur *Élément répété*
+- En-têtes : `Authorization` = `Bearer ` + `Jeton` ; `X-Destinations` = variable `Destinations`
+- Corps de la requête : **Formulaire** ; ajoute un champ **Fichier** de clé `fichier` et de valeur *Élément répété*
 
-### 4. Premier essai
-Photos > une photo > **Partager** > **Envoyer au PC**. iOS demande l'autorisation de contacter le PC :
-**Toujours autoriser**. La photo arrive dans *Téléchargements\Universal Airdrop*.
+### Essai
+Photos > une photo > **Partager** > **Envoyer** > coche ton PC > **OK**. La première fois, iOS demande
+l'autorisation de contacter le PC : **Toujours autoriser**.
 
-### 5. Le mettre en tête de la feuille de partage
-Feuille de partage > tout en bas **Modifier les actions…** > touche **+** devant *Envoyer au PC*.
+---
 
-## Partager le Raccourci à d'autres (pour que personne n'ait à le reconstruire)
+## Raccourci 2 : « Recevoir » (8 minutes)
 
-1. Dans Raccourcis, appui long sur *Envoyer au PC* > **Détails** > **Configurer** > **Questions d'importation**.
-   Ajoute une question pour l'action 1 (« Colle ton jeton ») et une pour l'action 2 (« Colle l'adresse de ton PC »).
-2. Remplace ton jeton et ton adresse par du texte vide : chacun mettra les siens à l'installation.
+**+** > renomme-le `Recevoir`. Il ne s'affiche pas dans la feuille de partage.
+
+| # | Action | Réglage |
+|---|---|---|
+| 1 | **Texte** | l'adresse du PC (la même) |
+| 2 | **Définir la variable** | `Adresse` |
+| 3 | **Texte** | ton jeton |
+| 4 | **Définir la variable** | `Jeton` |
+| 5 | **Obtenir le contenu de l'URL** | URL : `Adresse` puis `/api/rapide/boite` · réglages **G** (ci-dessus) |
+| 6 | **Définir la variable** | nom : `Boite` ; valeur : *Contenu de l'URL* |
+| 7 | **Obtenir la valeur du dictionnaire** | **Valeur** pour `texte` dans `Boite` |
+| 8 | **Si** | *Valeur du dictionnaire* **a une valeur** |
+| 9 | ↳ **Copier dans le presse-papiers** | *Valeur du dictionnaire* |
+| 10 | **Fin si** | |
+| 11 | **Obtenir la valeur du dictionnaire** | **Valeur** pour `fichiers` dans `Boite` |
+| 12 | **Répéter avec chaque élément** | dans : *Valeur du dictionnaire* |
+| 13 | ↳ **Obtenir la valeur du dictionnaire** | **Valeur** pour `url` dans *Élément répété* |
+| 14 | ↳ **Obtenir le contenu de l'URL** | URL : *Valeur du dictionnaire* · réglages **G** |
+| 15 | ↳ **Définir la variable** | nom : `Fichier` ; valeur : *Contenu de l'URL* |
+| 16 | ↳ **Obtenir la valeur du dictionnaire** | **Valeur** pour `destination` dans *Élément répété* |
+| 17 | ↳ **Si** | *Valeur du dictionnaire* **est** `photos` |
+| 18 | ↳↳ **Enregistrer dans l'album photo** | `Fichier` ; album : *Récents* |
+| 19 | ↳ **Sinon** | |
+| 20 | ↳↳ **Enregistrer le fichier** | `Fichier` ; désactive **Demander où enregistrer** ; dossier : `Universal Airdrop` |
+| 21 | ↳ **Fin si** | |
+| 22 | **Fin de la répétition** | |
+| 23 | **Obtenir la valeur du dictionnaire** | **Valeur** pour `resume` dans `Boite` |
+| 24 | **Afficher une notification** | *Valeur du dictionnaire* |
+
+La notification dit par exemple « 2 fichier(s) et 1 lien(s) ou texte(s), copié(s) de PC de Camil », ou
+« Rien à recevoir ». Chaque fichier reçu est retiré de la boîte d'envoi : il n'arrive qu'une fois.
+
+### Le lancer sans y penser (au choix)
+
+- **Automatiquement en arrivant à la maison** : Raccourcis > **Automatisation** > **+** > **Wi-Fi** >
+  choisis ton réseau > **Se connecte** > **Exécuter immédiatement** (désactive *Me notifier*) >
+  **Suivant** > *Recevoir*. Le partage de connexion n'est pas un réseau Wi-Fi pour l'iPhone : dans ce
+  cas, utilise une des deux solutions ci-dessous.
+- **D'un double tapotement au dos de l'iPhone** : Réglages > Accessibilité > Toucher > **Toucher le
+  dos** > Toucher deux fois > *Recevoir*.
+- **Depuis l'écran d'accueil** : appui long sur l'écran d'accueil > **+** > Raccourcis > *Recevoir*.
+- iPhone 15 Pro et plus récents : le **bouton Action** peut lancer *Recevoir*.
+
+---
+
+## Partager les Raccourcis à d'autres (personne n'aura à les reconstruire)
+
+1. Appui long sur *Envoyer* > **Détails** > **Configurer** > **Questions d'importation** : ajoute une
+   question pour l'action 1 (« Adresse de ton PC ») et une pour l'action 3 (« Ton jeton »). Fais de même
+   pour *Recevoir*.
+2. Remplace ton adresse et ton jeton par du texte vide : chacun mettra les siens à l'installation.
 3. Appui long > **Partager** > **Copier le lien iCloud**.
-4. Colle ce lien dans l'application sur le PC (**Ce PC** > **Réglages** > *Lien iCloud du Raccourci*).
-   L'assistant **Ajouter un iPhone** l'affichera alors en QR code : n'importe qui l'installe en 30 secondes.
+4. Colle le lien d'*Envoyer* dans l'application sur le PC (**Ce PC** > **Réglages** > *Lien iCloud du
+   Raccourci*) : l'assistant **Ajouter un iPhone** le proposera.
 
-## Deuxième PC
-Duplique le raccourci (appui long > Dupliquer), renomme-le (par exemple « Envoyer au PC fixe ») et mets le
-jeton et l'adresse donnés par **Ajouter un iPhone** sur ce deuxième PC.
+## Déjà le Raccourci de la v1 (« Envoyer au PC ») ?
+Il continue de marcher (sans en-tête `X-Destinations`, le PC garde les fichiers pour lui). Pour choisir
+les appareils, construis *Envoyer* ci-dessus avec le même jeton et la même adresse.
 
 ## En partage de connexion
 - **PC connecté au partage de l'iPhone** : rien à changer, l'adresse `….local` désigne le PC sur ce réseau aussi.
 - **iPhone connecté au point d'accès du PC** : rien à changer non plus.
-- Si l'adresse `….local` ne répond pas sur un réseau, utilise l'une des *adresses de secours* données avec le jeton.
+- Si l'adresse `….local` ne répond pas, utilise l'une des *adresses de secours* (carte **Ce PC** sur le PC).
 
 ## Dépannage
 
 | Symptôme | Cause probable | Correction |
 |---|---|---|
-| « Connexion non sécurisée » | certificat non installé ou confiance non activée | refaire l'étape 1 de « Ajouter un iPhone » |
-| Erreur 401 | jeton mal copié ou appareil retiré | refaire « Ajouter un iPhone » et recoller le jeton |
+| « Connexion non sécurisée » | certificat non installé ou confiance non activée | refaire les étapes 1 à 3 de la page `…/iphone` |
+| Erreur 401 | jeton mal copié ou iPhone retiré | refaire « Relier cet iPhone » et recoller le jeton |
 | Erreur 429 | trop d'essais avec un mauvais jeton | attendre 10 minutes, corriger le jeton |
-| Serveur introuvable | application arrêtée, ou réseau différent | lancer l'application sur le PC ; vérifier le Wi-Fi |
-| Grosse vidéo qui échoue | limite de mémoire des Raccourcis | utiliser **Afficher le QR code** sur le PC |
+| « aucun destinataire connu de ce PC » | nom d'appareil changé depuis | relancer *Envoyer* : la liste est relue à chaque fois |
+| Serveur introuvable | application arrêtée sur le PC, ou réseau différent | lancer l'application ; même Wi-Fi ou partage de connexion |
+| Grosse vidéo qui échoue | limite de mémoire des Raccourcis (au-delà de 1 à 2 Go) | sur le PC : **Afficher le QR code** (page d'envoi dans Safari) |
+| « Rien à recevoir » alors que le PC a envoyé | envoi fait vers un autre nom d'iPhone | sur le PC, vérifie le nom coché ; *Recevoir* ne lit que la boîte de ce jeton |

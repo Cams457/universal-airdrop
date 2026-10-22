@@ -20,13 +20,18 @@ dessus rouvre l'application.
 
 ## Utiliser
 
+**Nouveau en v2 :** plus de QR code entre tes appareils. Tu coches les destinataires (plusieurs à la fois),
+l'iPhone a ses deux Raccourcis *Envoyer* et *Recevoir*, un lien arrive dans le presse-papiers de l'autre
+appareil, et un PC relaie vers les autres PC et leurs téléphones.
+
 | Je veux… | Comment |
 |---|---|
 | Envoyer depuis le PC | Glisse les fichiers dans la fenêtre, **coche un ou plusieurs appareils**, puis **Envoyer**. Ou : clic droit sur un fichier > **Envoyer vers** > **Universal Airdrop** |
 | Envoyer un lien ou un texte | Colle-le dans la fenêtre (Ctrl+V), coche les appareils, **Envoyer** : il arrive **dans le presse-papiers** de l'autre PC (Ctrl+V pour le coller), avec une notification |
-| Envoyer vers un téléphone | Choisis « Un téléphone » : un QR code s'affiche, le téléphone le scanne et télécharge |
-| Envoyer depuis un téléphone | Sur le PC : **Afficher le QR code**. Le téléphone le scanne, choisit ses photos, touche **Envoyer**. Marche avec tous les téléphones |
-| Envoyer depuis le bouton Partager de l'iPhone | Ajoute ton iPhone une fois (**Ajouter un iPhone**, 5 minutes) : ensuite, dans n'importe quelle app, Partager → **Envoyer au PC** |
+| Envoyer vers ton iPhone (sans QR code) | Coche ton iPhone comme destinataire : le PC le garde dans sa **boîte d'envoi**. Sur l'iPhone, le Raccourci **Recevoir** (lancé tout seul en arrivant sur ton Wi-Fi, ou d'un double tapotement au dos) range les photos dans Photos et copie les liens |
+| Envoyer depuis l'iPhone (sans QR code) | Dans n'importe quelle app : Partager → **Envoyer**, coche un ou plusieurs appareils (PC, iPad…) |
+| Relier un iPhone | Une fois : **Ajouter un iPhone**, puis sur l'iPhone, tape l'adresse affichée dans Safari ; la page guide jusqu'au bout (certificat, puis un code à comparer sur le PC). Guide des Raccourcis : [docs/RACCOURCI_IOS.md](docs/RACCOURCI_IOS.md) |
+| Un téléphone d'ami, un Android | Pas d'installation : **Afficher le QR code** (pour recevoir de lui), ou « Un téléphone, par QR code » (pour lui envoyer) |
 | Envoyer entre deux PC | Installe l'application sur les deux, puis **Ajouter un PC** et compare le code à 6 chiffres |
 
 Les fichiers reçus arrivent dans **Téléchargements\Universal Airdrop**, avec une notification Windows. Les liens et
@@ -51,7 +56,7 @@ Un réseau d'école ou de café bloque souvent les échanges entre appareils : p
 ## Sécurité, en bref
 
 - Tous les échanges sont chiffrés (TLS). Chaque PC a son propre certificat, que tes autres appareils mémorisent.
-- Un appareil inconnu ne peut rien envoyer : il faut l'ajouter, et entre deux PC, comparer un code à 6 chiffres.
+- Un appareil inconnu ne peut rien envoyer : il faut l'ajouter en comparant un code à 6 chiffres affiché sur les deux écrans.
 - Rien n'est ouvert à Internet : seules les adresses du réseau local sont acceptées.
 - Détails : [docs/SECURITE.md](docs/SECURITE.md).
 
@@ -77,7 +82,7 @@ sources : voir [docs/DEVELOPPEMENT.md](docs/DEVELOPPEMENT.md).
 
 | Document | Contenu |
 |---|---|
-| [docs/RACCOURCI_IOS.md](docs/RACCOURCI_IOS.md) | Le Raccourci iPhone « Envoyer au PC », et comment le partager à d'autres |
+| [docs/RACCOURCI_IOS.md](docs/RACCOURCI_IOS.md) | Les Raccourcis iPhone « Envoyer » et « Recevoir », leur lancement automatique, et comment les partager |
 | [docs/VITESSE.md](docs/VITESSE.md) | Débits mesurés et ce qui limite la vitesse |
 | [docs/LANGAGE.md](docs/LANGAGE.md) | Pourquoi Go |
 | [docs/DEVELOPPEMENT.md](docs/DEVELOPPEMENT.md) | Compiler, tester, architecture, protocole |

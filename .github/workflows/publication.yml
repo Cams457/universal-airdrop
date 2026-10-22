@@ -2,7 +2,7 @@ name: tests et exécutables
 
 on:
   push:
-    branches: [main, application-go]
+    branches: [main, application-go, v2]
     tags: ["v*"]
   pull_request:
 

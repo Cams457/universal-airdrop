@@ -101,12 +101,15 @@
     var l = vider($("appareils"));
     if (!etat.appareils || !etat.appareils.length) l.appendChild(el("p", { classe: "doux", texte: "Aucun appareil pour l'instant. Ajoute ton iPhone ou un autre PC." }));
     (etat.appareils || []).forEach(function (a) {
-      var etiquette = a.type === "pc" ? (enLigne(a) ? "PC · en ligne" : "PC · hors ligne") : "téléphone";
+      var n = (etat.en_attente || {})[a.nom] || 0;
+      var etiquette = a.type === "pc" ? (enLigne(a) ? "PC · en ligne" : "PC · hors ligne") : "téléphone" + (n ? " · " + n + " en attente" : "");
       l.appendChild(el("div", { classe: "ligne" },
         el("span", { classe: "nom" }, el("span", { classe: "point" + (a.type === "pc" && enLigne(a) ? " en-ligne" : "") }), a.nom),
         el("span", { classe: "rangee" }, el("span", { classe: "doux", texte: etiquette }),
           el("button", { classe: "lien-discret danger", texte: "Retirer", onclick: function () { retirer(a.nom); } }))));
     });
+
+    demandesAcces();
 
     // événements
     var ev = (etat.evenements || []).filter(function (e) { return e.type === "recu" || e.type === "lien" || e.type === "envoye" || e.type === "erreur"; }).reverse();
@@ -197,24 +200,39 @@
     montrerCibles();
   }
 
+  // Toutes les destinations possibles : PC appairés, téléphones de ce PC (boîte d'envoi) et
+  // téléphones des autres PC (relais).
+  function destinations() {
+    var l = [];
+    pcs().forEach(function (a) {
+      l.push({ cle: "pc:" + a.nom, nom: a.nom, sous: enLigne(a) ? "PC · en ligne" : "PC · hors ligne ?", point: enLigne(a) ? "en-ligne" : "", type: "pc" });
+    });
+    (etat.appareils || []).filter(function (a) { return a.type === "telephone"; }).forEach(function (a) {
+      l.push({ cle: "tel:" + a.nom, nom: a.nom, sous: "📱 téléphone", point: "telephone", type: "tel" });
+    });
+    (etat.telephones_distants || []).forEach(function (d) {
+      l.push({ cle: "dist:" + d.nom + "\u0000" + d.via, nom: d.nom, via: d.via, sous: "📱 via " + d.via, point: "telephone", type: "dist" });
+    });
+    return l;
+  }
+
   function montrerCibles() {
     $("selection").hidden = false;
-    var c = vider($("cibles")), tous = pcs();
-    // un seul PC connu : il est pré-coché ; sinon on garde les choix précédents encore valables
+    var c = vider($("cibles")), tous = destinations();
     var garde = {};
-    tous.forEach(function (a) { if (choisis[a.nom]) garde[a.nom] = true; });
+    tous.forEach(function (d) { if (choisis[d.cle]) garde[d.cle] = d; });
     choisis = garde;
-    if (tous.length === 1) choisis[tous[0].nom] = true;
-    if (!tous.length) c.appendChild(el("p", { classe: "doux", texte: "Aucun autre PC pour l'instant : ajoute-le avec « Ajouter un PC » (carte Appareils)." }));
-    tous.forEach(function (a) {
-      var b = el("button", { classe: "cible" + (choisis[a.nom] ? " choisie" : ""), type: "button", "aria-pressed": choisis[a.nom] ? "true" : "false" },
+    if (tous.length === 1) choisis[tous[0].cle] = tous[0];
+    if (!tous.length) c.appendChild(el("p", { classe: "doux", texte: "Aucun appareil pour l'instant : ajoute ton iPhone ou un autre PC (carte Appareils)." }));
+    tous.forEach(function (d) {
+      var b = el("button", { classe: "cible" + (choisis[d.cle] ? " choisie" : ""), type: "button", "aria-pressed": choisis[d.cle] ? "true" : "false" },
         el("span", { classe: "coche", "aria-hidden": "true" }),
-        el("strong", null, el("span", { classe: "point" + (enLigne(a) ? " en-ligne" : "") }), a.nom),
-        el("span", { texte: enLigne(a) ? "PC · en ligne" : "PC · hors ligne ?" }));
+        el("strong", null, el("span", { classe: "point " + d.point }), d.nom),
+        el("span", { texte: d.sous }));
       b.addEventListener("click", function () {
-        choisis[a.nom] = !choisis[a.nom];
-        b.classList.toggle("choisie", choisis[a.nom]);
-        b.setAttribute("aria-pressed", choisis[a.nom] ? "true" : "false");
+        if (choisis[d.cle]) delete choisis[d.cle]; else choisis[d.cle] = d;
+        b.classList.toggle("choisie", !!choisis[d.cle]);
+        b.setAttribute("aria-pressed", choisis[d.cle] ? "true" : "false");
         majBouton();
       });
       c.appendChild(b);
@@ -222,20 +240,26 @@
     majBouton();
   }
 
-  function coches() { return Object.keys(choisis).filter(function (n) { return choisis[n]; }); }
+  function coches() { return Object.keys(choisis).map(function (k) { return choisis[k]; }); }
 
   function majBouton() {
-    var n = coches().length, b = $("envoyer-choix");
+    var l = coches(), n = l.length, b = $("envoyer-choix");
     b.disabled = n === 0;
-    b.textContent = n === 0 ? "Choisis un ou plusieurs appareils" : n === 1 ? "Envoyer à " + coches()[0] : "Envoyer aux " + n + " appareils";
+    b.textContent = n === 0 ? "Choisis un ou plusieurs appareils" : n === 1 ? "Envoyer à " + l[0].nom : "Envoyer aux " + n + " appareils";
+  }
+
+  function corpsDestinations() {
+    var cibles = [], distants = [];
+    coches().forEach(function (d) { if (d.type === "dist") distants.push({ nom: d.nom, via: d.via }); else cibles.push(d.nom); });
+    return { cibles: cibles, distants: distants };
   }
 
   $("envoyer-choix").addEventListener("click", function () {
-    var dest = coches(), b = $("envoyer-choix");
-    if (!dest.length || !courant) return;
+    var b = $("envoyer-choix"), corps = corpsDestinations();
+    if (!coches().length || !courant) return;
     b.disabled = true;
-    var req = courant.selection ? api("/controle/envoyer", { cibles: dest, selection: courant.selection })
-                                : api("/controle/lien", { cibles: dest, texte: courant.texte });
+    if (courant.selection) corps.selection = courant.selection; else corps.texte = courant.texte;
+    var req = api(courant.selection ? "/controle/envoyer" : "/controle/lien", corps);
     req.then(function (r) {
       if (courant && courant.texte) {
         var rates = (r.resultats || []).filter(function (x) { return x.erreur; });
@@ -297,46 +321,55 @@
     return e;
   }
 
+  // Ajouter un iPhone, sans QR code obligatoire : l'iPhone ouvre la page /iphone dans Safari
+  // (adresse à taper, ou QR code pour aller plus vite), installe le certificat, puis demande l'accès ;
+  // le PC affiche alors une fenêtre avec un code à comparer.
   function assistantIphone(suite) {
-    var nom = el("input", { type: "text", value: "iPhone", maxlength: "40" });
-    ouvrir(el("div", null, etapes(1, 4), el("h2", { texte: "Ajouter un iPhone" }),
-      el("p", { texte: "Trois étapes, environ 5 minutes, une seule fois. Garde l'iPhone sous la main." }),
-      el("label", { classe: "champ" }, "Nom de l'iPhone", nom),
-      el("div", { classe: "boutons" }, el("button", { classe: "bouton", texte: "Commencer", onclick: function () {
-        api("/controle/telephone/ajouter", { nom: nom.value }).then(function (r) { etapeProfil(r, suite); }).catch(function (e) { alert(e.message); });
-      } }))), suite);
+    api("/controle/telephone/page").then(function (r) {
+      var c = el("div", null, etapes(1, 2), el("h2", { texte: "Ajouter un iPhone" }),
+        el("p", { texte: "Sur l'iPhone, ouvre Safari et tape cette adresse :" }),
+        el("p", { classe: "adresse-grande", texte: r.liens[0].url.replace("https://", "") }),
+        el("p", { classe: "doux", texte: "La page guide pas à pas : installer le certificat de ce PC, puis « Relier cet iPhone ». Une fenêtre s'ouvrira ici pour accepter, avec un code à comparer." }));
+      var d = el("details", null, el("summary", { texte: "Plus rapide : scanner un QR code, ou une autre adresse" }));
+      d.appendChild(blocQR(r.liens, "Si l'adresse en .local ne répond pas, essaie une adresse ci-dessous (même Wi-Fi ou partage de connexion)."));
+      c.appendChild(d);
+      c.appendChild(el("div", { classe: "boutons" }, el("button", { classe: "bouton", texte: "Ensuite : les Raccourcis", onclick: function () { etapeRaccourcis(r, suite); } })));
+      ouvrir(c, suite);
+    }).catch(function (e) { alert(e.message); });
   }
 
-  function etapeProfil(r, suite) {
-    ouvrir(el("div", null, etapes(2, 4), el("h2", { texte: "1. Installer le certificat du PC" }),
-      blocQR(r.profil),
-      el("ol", { classe: "guide" },
-        el("li", { texte: "Scanne avec l'appareil photo de l'iPhone et ouvre le lien dans Safari. Si Safari parle de connexion non privée : « Afficher les détails », puis « visiter ce site web »." }),
-        el("li", { texte: "La page qui s'ouvre te guide : télécharger le profil, l'installer, puis l'activer dans Réglages > Général > Informations > Réglages des certificats." })),
-      el("p", { classe: "doux", texte: "Vérifie que l'empreinte SHA-256 affichée par l'iPhone est exactement :" }),
-      el("p", { classe: "empreinte", texte: r.empreinte }),
-      el("div", { classe: "boutons" }, el("button", { classe: "bouton", texte: "C'est fait", onclick: function () { etapeJeton(r, suite); } }))), suite);
-  }
-
-  function etapeJeton(r, suite) {
-    ouvrir(el("div", null, etapes(3, 4), el("h2", { texte: "2. Récupérer le jeton d'accès" }),
-      blocQR(r.jeton, "Cette page ne s'ouvre qu'une fois : copie le jeton et l'adresse (appui long sur le texte)."),
-      el("div", { classe: "boutons" }, el("button", { classe: "bouton", texte: "Copié", onclick: function () { etapeRaccourci(r, suite); } }))), suite);
-  }
-
-  function etapeRaccourci(r, suite) {
-    var c = el("div", null, etapes(4, 4), el("h2", { texte: "3. Le Raccourci « Envoyer au PC »" }));
+  function etapeRaccourcis(r, suite) {
+    var c = el("div", null, etapes(2, 2), el("h2", { texte: "Les deux Raccourcis de l'iPhone" }),
+      el("ul", { classe: "guide" },
+        el("li", null, el("strong", { texte: "Envoyer" }), " : dans n'importe quelle app, Partager → « Envoyer », puis coche les appareils."),
+        el("li", null, el("strong", { texte: "Recevoir" }), " : récupère ce que les PC lui ont envoyé (photos dans Photos, liens copiés). Il peut se lancer tout seul en arrivant sur ton Wi-Fi.")));
     if (r.lien_raccourci) {
-      c.appendChild(blocQR([{ url: r.lien_raccourci, qr: r.raccourci_qr }]));
-      c.appendChild(el("p", { texte: "Ouvre ce lien sur l'iPhone, touche « Ajouter le raccourci », puis colle le jeton et l'adresse quand il les demande." }));
+      c.appendChild(blocQR([{ url: r.lien_raccourci, qr: r.raccourci_qr }], "Ouvre ce lien sur l'iPhone pour installer les Raccourcis."));
     } else {
-      c.appendChild(el("p", { texte: "Construis le Raccourci une fois en suivant le guide (10 minutes). Ensuite, dans n'importe quelle app : Partager → « Envoyer au PC »." }));
-      c.appendChild(el("p", null, el("a", { href: GUIDE, target: "_blank", rel: "noopener", texte: "Ouvrir le guide du Raccourci" })));
+      c.appendChild(el("p", null, el("a", { href: GUIDE, target: "_blank", rel: "noopener", texte: "Ouvrir le guide des Raccourcis (15 minutes, une seule fois)" })));
     }
-    c.appendChild(el("p", { classe: "doux", texte: "Adresse à utiliser : " + r.adresse }));
-    c.appendChild(el("p", { classe: "alerte", texte: "Sans Raccourci, l'iPhone peut quand même envoyer : bouton « Afficher le QR code » de la carte « Recevoir depuis un téléphone »." }));
     c.appendChild(el("div", { classe: "boutons" }, el("button", { classe: "bouton", texte: "Terminer", onclick: function () { fermer(); rafraichir(); } })));
     ouvrir(c, suite);
+  }
+
+  // Demande d'accès d'un iPhone (page /iphone) : fenêtre avec le code à comparer.
+  var demandesVues = {};
+  function demandesAcces() {
+    (etat.demandes || []).forEach(function (d) {
+      if (demandesVues[d.id]) return;
+      demandesVues[d.id] = true;
+      var decider = function (ok) {
+        api("/controle/telephone/demande", { id: d.id, accepter: ok }).then(function () { fermer(); rafraichir(); })
+          .catch(function (e) { alert(e.message); fermer(); });
+      };
+      ouvrir(el("div", null, el("h2", { texte: "Ajouter « " + d.nom + " » ?" }),
+        el("p", { texte: "Vérifie que l'iPhone affiche exactement ce code :" }),
+        el("p", { classe: "code-grand", texte: d.code.slice(0, 3) + " " + d.code.slice(3) }),
+        el("p", { classe: "doux", texte: "Demande venue de " + d.ip + ". Si le code est différent, refuse : ce n'est pas ton iPhone." }),
+        el("div", { classe: "boutons" },
+          el("button", { classe: "bouton secondaire", texte: "Refuser", onclick: function () { decider(false); } }),
+          el("button", { classe: "bouton", texte: "Accepter", onclick: function () { decider(true); } }))));
+    });
   }
 
   // ---------- appairer un autre PC ----------

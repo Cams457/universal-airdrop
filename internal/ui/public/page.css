@@ -115,3 +115,14 @@ h2{margin:0 0 .3rem;font-size:1.06rem;font-weight:600}
 .note{color:var(--doux);font-size:.86rem;text-align:center;margin:.75rem .5rem 0}
 .pied{display:flex;align-items:center;justify-content:center;gap:.4rem;margin-top:2.25rem;color:var(--doux);font-size:.75rem;opacity:.85}
 .pied img{border-radius:4px}
+
+/* Relier cet iPhone */
+.relier{display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap}
+.relier input{flex:1;min-width:8rem;min-height:3.25rem;padding:.6rem .8rem;border-radius:14px;border:1px solid var(--trait);background:var(--fond);color:inherit;font:inherit}
+.relier .bouton{width:auto;flex:1 1 12rem}
+.etapes .code{font-size:2.3rem;font-weight:700;letter-spacing:.12em;text-align:center;margin:.4rem 0;font-variant-numeric:tabular-nums}
+.ok-texte{color:var(--ok);font-weight:600}
+.valeur{display:grid;grid-template-columns:1fr auto;gap:.2rem .6rem;align-items:center;padding:.6rem .7rem;border-radius:12px;background:var(--fond);margin:.5rem 0}
+.valeur .etiquette{grid-column:1/-1;color:var(--doux);font-size:.8rem;font-weight:500}
+.valeur code{font:.82rem/1.4 ui-monospace,"SF Mono",Menlo,monospace;overflow-wrap:anywhere;-webkit-user-select:all;user-select:all}
+.bouton.petit{min-height:2.4rem;width:auto;padding:.4rem .8rem;margin:0;font-size:.9rem}

@@ -169,3 +169,9 @@ func CodeVerification(empreinteA, empreinteB string, aleaA, aleaB []byte) string
 	d := h([]byte("code"), []byte(empreinteA), []byte(empreinteB), aleaA, aleaB)
 	return fmt.Sprintf("%06d", binary.BigEndian.Uint64(d[:8])%1_000_000)
 }
+
+// CodeAleatoire : 6 chiffres tirés au hasard, pour qu'on reconnaisse sur le PC la demande faite
+// depuis SON téléphone (et non celle d'un voisin sur le même réseau).
+func CodeAleatoire() string {
+	return fmt.Sprintf("%06d", binary.BigEndian.Uint64(Alea(8))%1_000_000)
+}

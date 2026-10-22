@@ -51,6 +51,7 @@ internal/
   decouverte   annonces multicast sur chaque interface
   mdns         nom Bonjour « nom-du-pc.local »
   partage      liens à usage unique (QR codes), page d'envoi pour téléphone
+  boite        v2 : boîte d'envoi de chaque téléphone (fichiers, liens, textes en attente)
   profilios    profil .mobileconfig
   systeme      pare-feu (UAC), démarrage automatique, Envoyer vers, ouverture de liens
   ui           interface locale et pages pour téléphone (HTML, CSS, JS embarqués)
@@ -69,6 +70,15 @@ internal/
 | POST | `/api/rapide/lien` | lien depuis le Raccourci ou un PC | jeton |
 | GET | `/p/{jeton}` et `/p/{jeton}/{i}` | partage vers un téléphone | jeton d'URL |
 | GET, POST | `/envoyer/{jeton}` | page d'envoi pour n'importe quel téléphone | jeton d'URL |
+| GET | `/api/rapide/destinations` | v2 : appareils proposés dans le Raccourci *Envoyer* | jeton |
+| GET | `/api/rapide/boite` | v2 : boîte d'envoi du téléphone (textes remis, URL des fichiers) | jeton de téléphone |
+| GET | `/api/rapide/boite/{id}` | v2 : un fichier en attente (retiré après lecture complète) | jeton de téléphone |
+| GET | `/api/v1/telephones` | v2 : téléphones de ce PC, pour le relais | jeton de PC |
+| POST, GET | `/api/v1/telephone/demande[/{id}]` | v2 : ajout d'un iPhone sans QR code | acceptation sur le PC |
+| GET | `/iphone`, `/profil.mobileconfig` | guide d'installation du certificat, profil iOS | aucune (données publiques) |
+
+En-têtes v2 : `X-Destinations: PC fixe|iPad` (choix de l'émetteur, éventuellement encodé en URL) ;
+entre PC, `X-De` (appareil d'origine, affiché) et `X-Pour` (téléphones du PC receveur à qui remettre l'envoi).
 
 Le jeton s'envoie dans `Authorization: Bearer …` (ou `X-Jeton`).
 

@@ -41,6 +41,16 @@ hors ligne jusqu'à faire coïncider les deux codes (10^6 essais, quelques secon
 fixe son aléa avant de connaître celui de l'autre. Un MITM ne réussit alors qu'avec une probabilité de
 10^-6 par tentative, chaque tentative est visible, et une fenêtre d'appairage en admet 3 au plus.
 
+## v2 : boîte d'envoi, relais, ajout sans QR code
+
+| Menace | Défense |
+|---|---|
+| Un voisin du réseau demande à être ajouté | `POST /api/v1/telephone/demande` ne donne **rien** : le jeton n'est remis qu'après acceptation sur le PC, où l'utilisateur compare un code à 6 chiffres tiré au hasard (affiché sur l'iPhone et sur le PC). Au plus 3 demandes en attente, une par adresse IP, 5 minutes de validité ; l'identifiant de suivi (256 bits) n'est connu que de la page qui a fait la demande |
+| Interception du jeton à sa remise | la page `/iphone` n'est utilisée qu'après installation du profil : la connexion est alors vérifiée (certificat du PC épinglé par iOS). Le jeton n'est remis qu'une fois |
+| Lecture de la boîte d'un autre téléphone | la boîte est celle du nom associé au jeton présenté ; un PC ne peut pas lire de boîte (403) ; un fichier est retiré après un téléchargement complet ; expiration après 7 jours ; la boîte est vidée quand on retire l'appareil |
+| Relais abusif | seul un PC **appairé** peut demander un relais (`X-Pour`), et seulement vers des téléphones de confiance du PC receveur ; `X-De` n'est qu'une étiquette affichée (« iPhone (via PC fixe) »), jamais une autorisation |
+| Texte piégé dans le presse-papiers | refus des caractères de contrôle (séquences d'échappement de terminal) ; un faux lien (`javascript:`, `file:`) est copié comme texte mais jamais ouvert |
+
 ## Téléphones
 - **iPhone avec Raccourci** : jeton propre à l'appareil, HTTPS vérifié grâce au profil installé.
 - **Page d'envoi par QR code** (tout téléphone) : l'URL contient un jeton de 128 bits valable 15 minutes.

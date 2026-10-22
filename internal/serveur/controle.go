@@ -3,6 +3,7 @@ package serveur
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,7 +11,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -123,6 +123,8 @@ func (s *Service) routesControle() http.Handler {
 	m.HandleFunc("POST /controle/telephone/ajouter", s.cAjouterTelephone)
 	m.HandleFunc("POST /controle/telephone/envoi", s.cEnvoiTelephone)
 	m.HandleFunc("POST /controle/revoquer", s.cRevoquer)
+	m.HandleFunc("POST /controle/telephone/demande", s.cDecisionDemande)
+	m.HandleFunc("GET /controle/telephone/page", s.cPageIphone)
 	m.HandleFunc("POST /controle/quitter", func(w http.ResponseWriter, r *http.Request) {
 		ecrireJSON(w, 200, map[string]bool{"ok": true})
 		if SurQuitter != nil {
@@ -179,6 +181,7 @@ func (s *Service) cEtat(w http.ResponseWriter, r *http.Request) {
 		"configure": s.Cfg.Configure, "lien_raccourci": s.Cfg.LienRaccourci,
 		"adresses": s.adresses(), "appareils": s.Reg.Liste(), "vus": vus,
 		"evenements": evts, "envois": envois, "systeme": systeme.LireEtat(),
+		"telephones_distants": s.telephonesDistants(), "en_attente": s.enAttente(), "demandes": s.demandesEnAttente(),
 	})
 }
 
@@ -535,20 +538,42 @@ func cibles(liste []string, une string) []string {
 	return l
 }
 
-// cEnvoyer envoie une sélection de fichiers à un ou plusieurs PC, en parallèle.
+// planInterface : les appareils cochés dans l'interface (PC, téléphones de ce PC, téléphones
+// d'un autre PC joints par relais).
+func (s *Service) planInterface(noms []string, distants []distant) (plan, error) {
+	p := s.resoudre(noms, s.Cfg.Nom)
+	if len(p.Inconnus) > 0 {
+		return p, fmt.Errorf("appareil inconnu : %s", strings.Join(p.Inconnus, ", "))
+	}
+	for _, d := range distants {
+		if _, pc, ok := s.Reg.TrouverPC(d.Via); ok && strings.TrimSpace(d.Nom) != "" {
+			p.Distants = append(p.Distants, distant{Nom: strings.TrimSpace(d.Nom), Via: pc.Nom})
+		} else {
+			return p, fmt.Errorf("« %s » n'est pas un PC appairé", d.Via)
+		}
+	}
+	p.Moi = false // s'envoyer à soi-même n'a pas de sens ici
+	if p.vide() {
+		return p, errors.New("choisis au moins un appareil")
+	}
+	return p, nil
+}
+
+// cEnvoyer envoie une sélection de fichiers à un ou plusieurs appareils, en parallèle.
 func (s *Service) cEnvoyer(w http.ResponseWriter, r *http.Request) {
 	var c struct {
-		Cible     string   `json:"cible"`
-		Cibles    []string `json:"cibles"`
-		Selection string   `json:"selection"`
-		Chemins   []string `json:"chemins"`
+		Cible     string    `json:"cible"`
+		Cibles    []string  `json:"cibles"`
+		Distants  []distant `json:"distants"`
+		Selection string    `json:"selection"`
+		Chemins   []string  `json:"chemins"`
 	}
 	if !lireJSON(w, r, &c) {
 		return
 	}
-	dest := cibles(c.Cibles, c.Cible)
-	if len(dest) == 0 {
-		erreur(w, http.StatusBadRequest, "choisis au moins un appareil")
+	p, err := s.planInterface(cibles(c.Cibles, c.Cible), c.Distants)
+	if err != nil {
+		erreur(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	sel := selection{Chemins: c.Chemins}
@@ -563,40 +588,14 @@ func (s *Service) cEnvoyer(w http.ResponseWriter, r *http.Request) {
 		erreur(w, http.StatusBadRequest, "aucun fichier à envoyer")
 		return
 	}
-	var total int64
-	for _, ch := range sel.Chemins {
-		if st, err := os.Stat(ch); err == nil {
-			total += st.Size()
-		}
-	}
-	var ids []string
-	var tous sync.WaitGroup
-	for _, cible := range dest {
-		e := &envoi{ID: securite.JetonCourt(), Cible: cible, Fichiers: len(sel.Chemins), Total: total, Debut: time.Now()}
-		s.mu.Lock()
-		s.envois[e.ID] = e
-		s.mu.Unlock()
-		ids = append(ids, e.ID)
-		tous.Add(1)
-		go func() {
-			defer tous.Done()
-			s.executerEnvoi(e, sel.Chemins)
-		}()
-	}
-	if sel.Temporaires {
-		go func() { // les copies temporaires ne disparaissent qu'une fois tous les envois finis
-			tous.Wait()
-			os.RemoveAll(filepath.Dir(sel.Chemins[0]))
-		}()
-	}
-	ecrireJSON(w, 200, map[string]any{"id": ids[0], "ids": ids})
+	ids := s.distribuer(sel.Chemins, p, "", sel.Temporaires)
+	ecrireJSON(w, 200, map[string]any{"ids": ids, "boites": p.Tels})
 }
 
-func (s *Service) executerEnvoi(e *envoi, chemins []string) {
-	bilans, err := client.Envoyer(context.Background(), s.Reg, e.Cible, chemins, client.Options{
-		Paralleles: s.Cfg.Paralleles, Source: s.Source(),
-		Progres: func(fait, _ int64) { e.FaitA.Store(fait) },
-	})
+func (s *Service) executerEnvoi(e *envoi, pc string, chemins []string, o client.Options) {
+	o.Paralleles, o.Source = s.Cfg.Paralleles, s.Source()
+	o.Progres = func(fait, _ int64) { e.FaitA.Store(fait) }
+	bilans, err := client.Envoyer(context.Background(), s.Reg, pc, chemins, o)
 	duree := time.Since(e.Debut)
 	s.mu.Lock()
 	e.Fini, e.Bilans = true, bilans
@@ -613,52 +612,48 @@ func (s *Service) executerEnvoi(e *envoi, chemins []string) {
 	}
 }
 
-// cLien envoie un lien ou un texte à un ou plusieurs PC ; il y est copié dans le presse-papiers.
+// cLien envoie un lien ou un texte à un ou plusieurs appareils ; il y est copié dans le
+// presse-papiers (ou mis en attente pour un téléphone).
 func (s *Service) cLien(w http.ResponseWriter, r *http.Request) {
 	var c struct {
-		Cible  string   `json:"cible"`
-		Cibles []string `json:"cibles"`
-		URL    string   `json:"url"`
-		Texte  string   `json:"texte"`
+		Cible    string    `json:"cible"`
+		Cibles   []string  `json:"cibles"`
+		Distants []distant `json:"distants"`
+		URL      string    `json:"url"`
+		Texte    string    `json:"texte"`
 	}
 	if !lireJSON(w, r, &c) {
 		return
 	}
 	texte := strings.TrimSpace(c.URL + c.Texte)
-	dest := cibles(c.Cibles, c.Cible)
-	if len(dest) == 0 || texte == "" {
-		erreur(w, http.StatusBadRequest, "il faut un texte et au moins un appareil")
+	if !texteAcceptable(texte) {
+		erreur(w, http.StatusBadRequest, "texte vide, trop long ou contenant des caractères de contrôle")
+		return
+	}
+	p, err := s.planInterface(cibles(c.Cibles, c.Cible), c.Distants)
+	if err != nil {
+		erreur(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	ctx, fin := context.WithTimeout(r.Context(), 20*time.Second)
 	defer fin()
+	echecs := s.distribuerTexte(ctx, texte, p, "")
 	type resultat struct {
 		Cible  string `json:"cible"`
 		Erreur string `json:"erreur,omitempty"`
 	}
-	res := make([]resultat, len(dest))
-	var tous sync.WaitGroup
-	for i, cible := range dest {
-		tous.Add(1)
-		go func() {
-			defer tous.Done()
-			res[i].Cible = cible
-			if err := client.EnvoyerLien(ctx, s.Reg, cible, texte, s.Source()); err != nil {
-				res[i].Erreur = err.Error()
-			}
-		}()
+	var res []resultat
+	for _, n := range p.PCs {
+		res = append(res, resultat{n, echecs[n]})
 	}
-	tous.Wait()
-	reussis := 0
-	for _, x := range res {
-		if x.Erreur == "" {
-			reussis++
-			s.Evenement("envoye", fmt.Sprintf("Lien envoyé à « %s »", x.Cible), "")
-		} else {
-			s.Evenement("erreur", fmt.Sprintf("Lien non envoyé à « %s » : %s", x.Cible, x.Erreur), "")
-		}
+	for _, d := range p.Distants {
+		l := fmt.Sprintf("%s (via %s)", d.Nom, d.Via)
+		res = append(res, resultat{l, echecs[l]})
 	}
-	if reussis == 0 {
+	for _, t := range p.Tels {
+		res = append(res, resultat{Cible: t})
+	}
+	if len(echecs) == len(res) {
 		erreur(w, http.StatusBadGateway, res[0].Erreur)
 		return
 	}
@@ -775,6 +770,19 @@ func (s *Service) cRevoquer(w http.ResponseWriter, r *http.Request) {
 		erreur(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.Boites.Vider(c.Nom)
 	s.Evenement("info", fmt.Sprintf("« %s » retiré des appareils de confiance", c.Nom), "")
 	ecrireJSON(w, 200, map[string]int{"retires": n})
+}
+
+// cPageIphone : l'adresse de la page /iphone à ouvrir dans Safari (à taper ou à scanner).
+func (s *Service) cPageIphone(w http.ResponseWriter, r *http.Request) {
+	local := fmt.Sprintf("https://%s.local:%d/iphone", s.Cfg.NomMdns(), s.Cfg.Port)
+	liens := []lienQR{{URL: local, QR: QR(local), Reseau: "nom du PC (Bonjour)"}}
+	for _, l := range s.liensQR("/iphone") {
+		l.QR = ""
+		liens = append(liens, l)
+	}
+	ecrireJSON(w, 200, map[string]any{"liens": liens, "lien_raccourci": s.Cfg.LienRaccourci,
+		"raccourci_qr": qrSiLien(s.Cfg.LienRaccourci)})
 }

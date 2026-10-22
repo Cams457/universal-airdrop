@@ -1,6 +1,7 @@
 package serveur
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -89,6 +90,12 @@ func (s *Service) routesPubliques() http.Handler {
 	m.HandleFunc("POST /api/v1/transfert/{ident}/terminer", s.transfertTerminer)
 	m.HandleFunc("POST /api/rapide/fichier", s.rapideFichier)
 	m.HandleFunc("POST /api/rapide/lien", s.rapideLien)
+	m.HandleFunc("GET /api/rapide/destinations", s.rDestinations)
+	m.HandleFunc("GET /api/rapide/boite", s.rBoite)
+	m.HandleFunc("GET /api/rapide/boite/{id}", s.rBoiteFichier)
+	m.HandleFunc("GET /api/v1/telephones", s.rTelephones)
+	m.HandleFunc("POST /api/v1/telephone/demande", s.rDemander)
+	m.HandleFunc("GET /api/v1/telephone/demande/{id}", s.rSuivreDemande)
 	m.HandleFunc("GET /iphone", s.pageIphone)
 	m.HandleFunc("GET /profil.mobileconfig", s.profilIOS)
 	m.HandleFunc("GET /p/{jeton}", s.pagePartage)
@@ -248,7 +255,22 @@ func (s *Service) transfertTerminer(w http.ResponseWriter, r *http.Request) {
 	if !lireJSON(w, r, &c) {
 		return
 	}
-	final, raison := rec.Finaliser(s.Cfg.DossierReception(), c.Racine)
+	auteur, pour := origine(r, a)
+	var tels []string
+	for _, n := range pour {
+		if t, ok := s.Reg.TrouverTelephone(n); ok {
+			tels = append(tels, t)
+		}
+	}
+	dossier := s.Cfg.DossierReception()
+	if len(tels) > 0 { // relais pour nos téléphones : le fichier ne fait que passer par ce PC
+		var err error
+		if dossier, err = s.dossierRelais(); err != nil {
+			erreur(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	final, raison := rec.Finaliser(dossier, c.Racine)
 	if raison != "" {
 		erreur(w, http.StatusUnprocessableEntity, raison)
 		return
@@ -257,7 +279,12 @@ func (s *Service) transfertTerminer(w http.ResponseWriter, r *http.Request) {
 	delete(s.receptions, r.PathValue("ident"))
 	s.mu.Unlock()
 	st, _ := os.Stat(final)
-	s.recu(a.Nom, final, st.Size())
+	if len(tels) > 0 {
+		s.deposer(tels, auteur, []string{final})
+		os.RemoveAll(dossier)
+	} else {
+		s.recu(auteur, final, st.Size())
+	}
 	ecrireJSON(w, 200, map[string]any{"nom": filepath.Base(final), "taille": st.Size()})
 }
 
@@ -281,7 +308,7 @@ func rendreTampon(b []byte) {
 // ---------- téléphones : API rapide (Raccourci iOS) et page d'envoi ----------
 
 // ecrireFlux écrit un flux reçu directement sur disque, sans tout garder en mémoire.
-func (s *Service) ecrireFlux(src io.Reader, nom, auteur string) (string, error) {
+func (s *Service) ecrireFlux(src io.Reader, nom, auteur, dossier string, annoncer bool) (string, error) {
 	if err := os.MkdirAll(s.tmp(), 0o755); err != nil {
 		return "", err
 	}
@@ -298,28 +325,33 @@ func (s *Service) ecrireFlux(src io.Reader, nom, auteur string) (string, error) 
 		}
 		return "", errFerm
 	}
-	final, err := securite.CheminLibre(s.Cfg.DossierReception(), securite.NomSur(nom))
+	final, err := securite.CheminLibre(dossier, securite.NomSur(nom))
+	if err == nil {
+		err = os.Rename(tmp.Name(), final)
+		if err != nil { // autre disque (dossier temporaire) : copie
+			err = copierFichier(tmp.Name(), final)
+		}
+	}
+	os.Remove(tmp.Name())
 	if err != nil {
-		os.Remove(tmp.Name())
 		return "", err
 	}
-	if err := os.Rename(tmp.Name(), final); err != nil {
-		os.Remove(tmp.Name())
-		return "", err
+	if annoncer {
+		st, _ := os.Stat(final)
+		s.recu(auteur, final, st.Size())
 	}
-	st, _ := os.Stat(final)
-	s.recu(auteur, final, st.Size())
 	return final, nil
 }
 
 func nomParDefaut() string { return "fichier-" + time.Now().Format("20060102-150405") }
 
-// recevoirFormulaire : multipart (plusieurs fichiers) ou corps brut avec l'en-tête X-Nom.
-func (s *Service) recevoirFormulaire(w http.ResponseWriter, r *http.Request, auteur string) {
+// recevoirFichiers : multipart (plusieurs fichiers) ou corps brut avec l'en-tête X-Nom, écrits dans
+// dossier. En cas d'erreur, la réponse est déjà écrite et ok vaut false.
+func (s *Service) recevoirFichiers(w http.ResponseWriter, r *http.Request, auteur, dossier string, annoncer bool) ([]string, bool) {
 	if r.ContentLength > 0 {
 		if libre, err := espaceLibre(s.Cfg.DossierReception()); err == nil && libre < uint64(r.ContentLength) {
 			erreur(w, http.StatusInsufficientStorage, "espace disque insuffisant")
-			return
+			return nil, false
 		}
 	}
 	var recus []string
@@ -327,7 +359,7 @@ func (s *Service) recevoirFormulaire(w http.ResponseWriter, r *http.Request, aut
 		lecteur, err := r.MultipartReader()
 		if err != nil {
 			erreur(w, http.StatusBadRequest, "formulaire invalide")
-			return
+			return nil, false
 		}
 		for {
 			p, err := lecteur.NextPart()
@@ -336,37 +368,70 @@ func (s *Service) recevoirFormulaire(w http.ResponseWriter, r *http.Request, aut
 			}
 			if err != nil {
 				erreur(w, http.StatusBadRequest, "formulaire interrompu")
-				return
+				return nil, false
 			}
 			if p.FileName() == "" {
 				p.Close()
 				continue
 			}
-			final, err := s.ecrireFlux(p, nomPartie(p), auteur)
+			final, err := s.ecrireFlux(p, nomPartie(p), auteur, dossier, annoncer)
 			p.Close()
 			if err != nil {
 				erreur(w, http.StatusInternalServerError, "écriture impossible")
-				return
+				return nil, false
 			}
-			recus = append(recus, filepath.Base(final))
+			recus = append(recus, final)
 		}
 	} else {
 		nom, _ := url.QueryUnescape(r.Header.Get("X-Nom"))
 		if nom == "" {
 			nom = nomParDefaut()
 		}
-		final, err := s.ecrireFlux(r.Body, nom, auteur)
+		final, err := s.ecrireFlux(r.Body, nom, auteur, dossier, annoncer)
 		if err != nil {
 			erreur(w, http.StatusBadRequest, "envoi interrompu")
-			return
+			return nil, false
 		}
-		recus = append(recus, filepath.Base(final))
+		recus = append(recus, final)
 	}
 	if len(recus) == 0 {
 		erreur(w, http.StatusBadRequest, "aucun fichier dans la requête")
-		return
+		return nil, false
 	}
-	ecrireJSON(w, 200, map[string]any{"recus": recus})
+	return recus, true
+}
+
+func noms(chemins []string) []string {
+	l := make([]string, len(chemins))
+	for i, c := range chemins {
+		l[i] = filepath.Base(c)
+	}
+	return l
+}
+
+// recevoirFormulaire : réception simple sur ce PC (page d'envoi par QR code).
+func (s *Service) recevoirFormulaire(w http.ResponseWriter, r *http.Request, auteur string) {
+	if recus, ok := s.recevoirFichiers(w, r, auteur, s.Cfg.DossierReception(), true); ok {
+		ecrireJSON(w, 200, map[string]any{"recus": noms(recus)})
+	}
+}
+
+func copierFichier(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	if _, err := io.CopyBuffer(out, in, make([]byte, 1<<20)); err != nil {
+		out.Close()
+		os.Remove(dst)
+		return err
+	}
+	return out.Close()
 }
 
 func nomPartie(p *multipart.Part) string {
@@ -376,12 +441,47 @@ func nomPartie(p *multipart.Part) string {
 	return nomParDefaut()
 }
 
+// rapideFichier : fichiers envoyés par le Raccourci (ou relayés par un PC pour nos téléphones).
+// En-tête facultatif X-Destinations : « PC de Camil|PC portable|iPad » ; sans lui, ce PC seul.
 func (s *Service) rapideFichier(w http.ResponseWriter, r *http.Request) {
 	a, _, ok := s.authentifier(w, r)
 	if !ok {
 		return
 	}
-	s.recevoirFormulaire(w, r, a.Nom)
+	auteur, pour := origine(r, a)
+	var p plan
+	if len(pour) > 0 { // relais d'un PC appairé vers nos téléphones
+		for _, n := range pour {
+			if t, ok := s.Reg.TrouverTelephone(n); ok {
+				p.Tels = append(p.Tels, t)
+			}
+		}
+	} else if noms := decoderListe(r.Header.Get("X-Destinations")); len(noms) > 0 {
+		p = s.resoudre(noms, a.Nom)
+	} else {
+		p.Moi = true
+	}
+	if p.vide() {
+		erreur(w, http.StatusBadRequest, "aucun destinataire connu de ce PC")
+		return
+	}
+	dossier := s.Cfg.DossierReception()
+	if !p.Moi {
+		var err error
+		if dossier, err = s.dossierRelais(); err != nil {
+			erreur(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	recus, ok := s.recevoirFichiers(w, r, auteur, dossier, p.Moi)
+	if !ok {
+		if !p.Moi {
+			os.RemoveAll(dossier)
+		}
+		return
+	}
+	s.distribuer(recus, p, auteur, !p.Moi)
+	ecrireJSON(w, 200, map[string]any{"recus": noms(recus), "relais": p.PCs, "en_attente_pour": p.Tels, "inconnus": p.Inconnus})
 }
 
 // TexteMax : taille maximale d'un lien ou d'un texte envoyé (le reste passe par un fichier).
@@ -434,9 +534,36 @@ func (s *Service) rapideLien(w http.ResponseWriter, r *http.Request) {
 		erreur(w, http.StatusBadRequest, "texte vide, trop long ou contenant des caractères de contrôle")
 		return
 	}
+	auteur, pour := origine(r, a)
+	var p plan
+	if len(pour) > 0 {
+		for _, n := range pour {
+			if t, ok := s.Reg.TrouverTelephone(n); ok {
+				p.Tels = append(p.Tels, t)
+			}
+		}
+	} else if noms := decoderListe(r.Header.Get("X-Destinations")); len(noms) > 0 {
+		p = s.resoudre(noms, a.Nom)
+	} else {
+		p.Moi = true
+	}
+	if p.vide() {
+		erreur(w, http.StatusBadRequest, "aucun destinataire connu de ce PC")
+		return
+	}
+	echecs := map[string]string{}
+	if len(p.PCs)+len(p.Tels) > 0 {
+		ctx, fin := context.WithTimeout(r.Context(), 20*time.Second)
+		echecs = s.distribuerTexte(ctx, texte, plan{PCs: p.PCs, Tels: p.Tels}, auteur)
+		fin()
+	}
+	if !p.Moi {
+		ecrireJSON(w, 200, map[string]any{"relais": p.PCs, "en_attente_pour": p.Tels, "echecs": echecs})
+		return
+	}
 	estLien := securite.URLAutorisee(texte)
 	if f, err := os.OpenFile(filepath.Join(s.Cfg.Donnees, "liens.txt"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
-		fmt.Fprintf(f, "%s  %s  %s\n", time.Now().Format(time.RFC3339), a.Nom, strings.ReplaceAll(texte, "\n", " "))
+		fmt.Fprintf(f, "%s  %s  %s\n", time.Now().Format(time.RFC3339), auteur, strings.ReplaceAll(texte, "\n", " "))
 		f.Close()
 	}
 	copie := s.CopierTexte != nil && s.CopierTexte(texte) == nil
@@ -459,9 +586,9 @@ func (s *Service) rapideLien(w http.ResponseWriter, r *http.Request) {
 	if copie {
 		suffixe = " (copié dans le presse-papiers)"
 	}
-	s.EvenementNotifie("lien", fmt.Sprintf("%s reçu de « %s »%s : %s", quoi, a.Nom, suffixe, apercu), "",
-		fmt.Sprintf("%s reçu de %s", quoi, a.Nom), corpsNotif)
-	ecrireJSON(w, 200, map[string]any{"ouvert": ouvert, "copie": copie, "lien": estLien})
+	s.EvenementNotifie("lien", fmt.Sprintf("%s reçu de « %s »%s : %s", quoi, auteur, suffixe, apercu), "",
+		fmt.Sprintf("%s reçu de %s", quoi, auteur), corpsNotif)
+	ecrireJSON(w, 200, map[string]any{"ouvert": ouvert, "copie": copie, "lien": estLien, "relais": p.PCs, "en_attente_pour": p.Tels, "echecs": echecs})
 }
 
 // pageEnvoi : page d'envoi téléphone -> PC, pour n'importe quel téléphone (Android compris).

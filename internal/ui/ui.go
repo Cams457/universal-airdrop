@@ -113,12 +113,23 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{"genre": genre
 <li class="carte"><span class="num">3</span><div><h2>L'activer</h2>
 <p class="chemin"><span>Réglages</span> <span><i>›</i> Général</span> <span><i>›</i> Informations</span> <span><i>›</i> Réglages des certificats</span></p>
 <p>Active <b>{{.NomCA}}</b>. Cette ligne n'apparaît qu'une fois le profil installé.</p></div></li>
+<li class="carte"><span class="num">4</span><div><h2>Relier cet iPhone</h2>
+<p>Donne-lui un nom, puis accepte sur le PC après avoir vérifié le code.</p>
+<form id="relier" class="relier"><input id="nom-iphone" type="text" value="iPhone" maxlength="40" autocomplete="off" aria-label="Nom de l'iPhone">
+<button class="bouton principal" type="submit">Relier cet iPhone</button></form>
+<div id="attente" class="cache"><p class="sous">Sur le PC, une fenêtre s'est ouverte. Vérifie que le code est le même, puis touche <b>Accepter</b> :</p>
+<p class="code" id="code"></p><p class="sous" id="attente-etat">En attente du PC…</p></div>
+<div id="relie" class="cache"><p class="ok-texte">Cet iPhone est relié à {{.Entete.PC}}. Copie ces deux valeurs : les Raccourcis te les demanderont à l'installation.</p>
+<div class="valeur"><span class="etiquette">Adresse du PC</span><code id="adresse"></code><button class="bouton secondaire petit" type="button" data-copier="adresse">Copier</button></div>
+<div class="valeur"><span class="etiquette">Jeton (secret)</span><code id="jeton"></code><button class="bouton secondaire petit" type="button" data-copier="jeton">Copier</button></div>
+<p class="sous">Ce jeton ne s'affiche qu'une fois. Garde-le seulement dans tes Raccourcis.</p></div>
+<p class="erreur cache" id="relier-erreur" role="alert"></p></div></li>
 </ol>
 <section class="carte"><div class="carte-titre">{{template "i-bouclier"}}<span>Vérifie l'empreinte</span></div>
 <p class="sous">Dans le profil installé : <b>Plus de détails</b> → le certificat → <b>SHA-256</b>. Elle doit être identique à celle-ci et à celle affichée sur le PC :</p>
 <div class="empreinte">{{range .Empreinte}}<span>{{.}}</span>{{end}}</div></section>
-<p class="note">Ouvre cette page dans <b>Safari</b> : les autres navigateurs ne savent pas installer de profil. Ensuite, reviens sur le PC et touche « C'est fait ».</p>
-{{template "fin"}}{{end}}
+<p class="note">Ouvre cette page dans <b>Safari</b> : les autres navigateurs ne savent pas installer de profil.</p>
+<script src="/statique/iphone.js"></script>{{template "fin"}}{{end}}
 `))
 
 type FichierPartage struct{ Nom, Taille, URL string }
